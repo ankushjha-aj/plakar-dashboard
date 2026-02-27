@@ -5,65 +5,88 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 const navItems = [
-    { href: '/', label: 'Dashboard', icon: '📊' },
-    { href: '/backup', label: 'Backup', icon: '🔒' },
-    { href: '/snapshots', label: 'Snapshots', icon: '📸' },
-    { href: '/restore', label: 'Restore', icon: '♻️' },
-    { href: '/settings', label: 'Settings', icon: '⚙️' },
+    { href: '/', label: 'Dashboard', icon: 'dashboard' },
+    { href: '/backup', label: 'Backup', icon: 'backup' },
+    { href: '/snapshots', label: 'Snapshots', icon: 'history' },
+    { href: '/restore', label: 'Restore', icon: 'restore' },
+    { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const [theme, setTheme] = useState('dark');
+    const [dark, setDark] = useState(false);
 
     useEffect(() => {
-        const saved = localStorage.getItem('plakar-theme') || 'dark';
-        setTheme(saved);
-        document.documentElement.setAttribute('data-theme', saved);
+        setDark(document.documentElement.classList.contains('dark'));
     }, []);
 
     const toggleTheme = () => {
-        const next = theme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('plakar-theme', next);
+        const next = !dark;
+        setDark(next);
+        if (next) {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('plakar-theme', 'dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('plakar-theme', 'light');
+        }
     };
 
     return (
-        <aside className="sidebar">
-            <div className="sidebar-logo">
-                <div className="sidebar-logo-icon">P</div>
-                <div>
-                    <div className="sidebar-logo-text">Plakar</div>
-                    <div className="sidebar-logo-sub">Dashboard</div>
+        <aside className="w-64 flex-shrink-0 bg-white dark:bg-[#0b1120] border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between z-20 transition-colors duration-300">
+            {/* Top section */}
+            <div>
+                {/* Logo */}
+                <div className="h-20 flex items-center px-6 border-b border-slate-100 dark:border-slate-800/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/20">
+                            P
+                        </div>
+                        <span className="font-bold text-xl tracking-tight text-slate-900 dark:text-white">
+                            Plakar
+                        </span>
+                    </div>
                 </div>
+
+                {/* Navigation */}
+                <nav className="mt-6 px-3 space-y-1">
+                    {navItems.map((item) => {
+                        const isActive = pathname === item.href;
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`sidebar-link flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all ${isActive
+                                        ? 'active'
+                                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-100'
+                                    }`}
+                            >
+                                <span className="material-icons-round text-[20px]">
+                                    {item.icon}
+                                </span>
+                                {item.label}
+                            </Link>
+                        );
+                    })}
+                </nav>
             </div>
-            <nav className="sidebar-nav">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`sidebar-link ${pathname === item.href ? 'active' : ''
-                            }`}
-                    >
-                        <span className="sidebar-link-icon">{item.icon}</span>
-                        <span>{item.label}</span>
-                    </Link>
-                ))}
-            </nav>
-            {/* Theme toggle at the bottom */}
-            <div
-                style={{
-                    padding: '16px 12px',
-                    borderTop: '1px solid var(--border-color)',
-                }}
-            >
-                <button className="sidebar-link" onClick={toggleTheme} style={{ width: '100%' }}>
-                    <span className="sidebar-link-icon">
-                        {theme === 'dark' ? '☀️' : '🌙'}
+
+            {/* Bottom section */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800/50">
+                {/* Theme toggle */}
+                <div className="flex items-center justify-between px-2 mb-4">
+                    <span className="text-xs font-semibold uppercase text-slate-400 dark:text-slate-500">
+                        Theme
                     </span>
-                    <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-                </button>
+                    <button
+                        onClick={toggleTheme}
+                        className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none"
+                    >
+                        <span className="material-icons-round text-sm">
+                            {dark ? 'dark_mode' : 'light_mode'}
+                        </span>
+                    </button>
+                </div>
             </div>
         </aside>
     );
