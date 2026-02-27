@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
-import ThemeToggle from '@/components/ThemeToggle';
+import { SidebarProvider } from '@/components/SidebarContext';
 
 export const metadata: Metadata = {
   title: 'Plakar Dashboard',
@@ -17,7 +17,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
         <link
@@ -25,7 +25,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body suppressHydrationWarning className="bg-[#f8fafc] dark:bg-[#0f172a] text-slate-800 dark:text-slate-200 h-screen overflow-hidden flex transition-colors duration-300">
+      <body suppressHydrationWarning className="bg-[#f0f2f5] dark:bg-[#080d1a] text-slate-800 dark:text-slate-200 h-screen overflow-hidden flex transition-colors duration-500 noise-overlay">
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){
@@ -36,17 +36,20 @@ export default function RootLayout({
             })();`,
           }}
         />
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto relative z-10">
-          <div className="fixed top-0 left-0 right-0 h-96 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent pointer-events-none z-0" />
-          {/* Theme toggle — top right */}
-          <div className="absolute top-4 right-6 z-30">
-            <ThemeToggle />
-          </div>
-          <div className="container mx-auto px-8 py-10 relative z-10 max-w-6xl">
-            {children}
-          </div>
-        </main>
+        {/* Animated background */}
+        <div className="bg-orb bg-orb-1" />
+        <div className="bg-orb bg-orb-2" />
+        <div className="bg-orb bg-orb-3" />
+        <div className="grid-overlay" />
+
+        <SidebarProvider>
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto relative z-10 min-w-0">
+            <div className="px-4 sm:px-6 lg:px-8 pt-4 lg:pt-6 pb-6 lg:pb-8 relative z-10 max-w-7xl mx-auto">
+              {children}
+            </div>
+          </main>
+        </SidebarProvider>
       </body>
     </html>
   );
