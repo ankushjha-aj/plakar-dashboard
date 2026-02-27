@@ -24,7 +24,7 @@ export default function ThemeToggle() {
     return (
         <button
             onClick={toggle}
-            className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-slate-100/60 dark:hover:bg-white/5 transition-all hover:scale-110 cursor-pointer"
+            className="px-3 py-2 sm:px-4 sm:py-2.5 mt-2 text-slate-500 dark:text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
             <span className="material-icons-round text-xl">

@@ -82,10 +82,10 @@ export default function Sidebar() {
                 </nav>
             </div>
 
-            {/* Bottom — Security badge */}
+            {/* Bottom — Security badge + credit */}
             {!collapsed && (
                 <div className="flex-shrink-0 p-4">
-                    <div className="gradient-border p-3 rounded-xl">
+                    <div className="gradient-border p-3 rounded-xl mb-3">
                         <div className="relative z-10">
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="material-icons-round text-indigo-400 text-base">security</span>
@@ -96,6 +96,9 @@ export default function Sidebar() {
                             </p>
                         </div>
                     </div>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-600 text-center leading-tight">
+                        Co-powered by <span className="font-bold text-slate-500 dark:text-slate-500">Ankush Kumar Jha</span>
+                    </p>
                 </div>
             )}
         </aside>
