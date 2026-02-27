@@ -95,7 +95,7 @@ export default function DashboardPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-white dark:glass-panel p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 transition-all hover:border-indigo-500/30">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 transition-all hover:border-indigo-500/30">
           <div className="flex justify-between items-start mb-4">
             <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400"><span className="material-icons-round">cloud_upload</span></div>
             <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-300">Local</span>
@@ -103,7 +103,7 @@ export default function DashboardPage() {
           <div className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{repos.length} Repo{repos.length !== 1 ? 's' : ''}</div>
           <p className="text-sm text-slate-500 dark:text-slate-400">Registered repositories</p>
         </div>
-        <div className="bg-white dark:glass-panel p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 transition-all hover:border-indigo-500/30">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 transition-all hover:border-indigo-500/30">
           <div className="flex justify-between items-start mb-4">
             <div className="p-2 bg-purple-50 dark:bg-purple-500/10 rounded-lg text-purple-600 dark:text-purple-400"><span className="material-icons-round">lock</span></div>
             <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-300">AES-256</span>
@@ -111,7 +111,7 @@ export default function DashboardPage() {
           <div className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Encrypted</div>
           <p className="text-sm text-slate-500 dark:text-slate-400">Data secured at rest</p>
         </div>
-        <div className="bg-white dark:glass-panel p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 transition-all hover:border-indigo-500/30">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 transition-all hover:border-indigo-500/30">
           <div className="flex justify-between items-start mb-4">
             <div className="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg text-emerald-600 dark:text-emerald-400"><span className="material-icons-round">shield</span></div>
             <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-300">Dedup</span>
@@ -125,7 +125,7 @@ export default function DashboardPage() {
       <div className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Your Repositories</h2>
-          <Link href="/backup" className="text-sm font-medium text-indigo-500 hover:text-indigo-600 flex items-center gap-1 transition-colors">
+          <Link href="/backup?init=true" className="text-sm font-medium text-indigo-500 hover:text-indigo-600 flex items-center gap-1 transition-colors">
             <span className="material-icons-round text-sm">add</span> New Repository
           </Link>
         </div>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-12 text-center">
             <span className="material-icons-round text-4xl text-slate-300 dark:text-slate-600 mb-3 block">inventory_2</span>
             <p className="text-slate-500 dark:text-slate-400 mb-4">No repositories registered yet.</p>
-            <Link href="/backup" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 shadow-lg shadow-indigo-500/30 transition-all">
+            <Link href="/backup?init=true" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 shadow-lg shadow-indigo-500/30 transition-all">
               <span className="material-icons-round text-base">add</span>Create Your First Repository
             </Link>
           </div>
@@ -169,7 +169,7 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Quick Actions</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <Link href="/backup" className="group relative overflow-hidden bg-white dark:glass-panel p-6 rounded-2xl text-left border border-slate-200 dark:border-slate-700/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
+        <Link href="/backup" className="group relative overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl text-left border border-slate-200 dark:border-slate-700/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 group-hover:from-indigo-500/5 group-hover:via-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500" />
           <div className="relative z-10">
             <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300"><span className="material-icons-round text-2xl">add</span></div>
@@ -177,7 +177,7 @@ export default function DashboardPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Create a new snapshot of your local files.</p>
           </div>
         </Link>
-        <Link href="/snapshots" className="group relative overflow-hidden bg-white dark:glass-panel p-6 rounded-2xl text-left border border-slate-200 dark:border-slate-700/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
+        <Link href="/snapshots" className="group relative overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl text-left border border-slate-200 dark:border-slate-700/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 group-hover:from-indigo-500/5 group-hover:via-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500" />
           <div className="relative z-10">
             <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300"><span className="material-icons-round text-2xl">folder_open</span></div>
@@ -185,7 +185,7 @@ export default function DashboardPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Browse your encrypted data history.</p>
           </div>
         </Link>
-        <Link href="/restore" className="group relative overflow-hidden bg-white dark:glass-panel p-6 rounded-2xl text-left border border-slate-200 dark:border-slate-700/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
+        <Link href="/restore" className="group relative overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl text-left border border-slate-200 dark:border-slate-700/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 group-hover:from-indigo-500/5 group-hover:via-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500" />
           <div className="relative z-10">
             <div className="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-500/20 flex items-center justify-center text-pink-600 dark:text-pink-400 mb-4 group-hover:bg-pink-600 group-hover:text-white transition-colors duration-300"><span className="material-icons-round text-2xl">replay</span></div>

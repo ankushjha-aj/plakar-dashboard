@@ -21,6 +21,8 @@ export default function BackupPage() {
     useEffect(() => {
         const qr = searchParams.get('repo');
         if (qr) setRepository(qr);
+        const init = searchParams.get('init');
+        if (init === 'true') setInitMode(true);
     }, [searchParams]);
 
     const openNativePicker = async (target: 'repo' | 'source') => {
