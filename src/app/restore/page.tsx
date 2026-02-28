@@ -1,7 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+type OSType = 'windows' | 'macos' | 'linux';
 
 export default function RestorePage() {
+    const [detectedOS, setDetectedOS] = useState<OSType>('windows');
+
+    useEffect(() => {
+        fetch('/api/plakar/status').then(r => r.json()).then(d => { if (d.os) setDetectedOS(d.os); }).catch(() => { });
+    }, []);
     const [repo, setRepo] = useState('');
     const [snapId, setSnapId] = useState('');
     const [dest, setDest] = useState('');
@@ -73,7 +80,7 @@ export default function RestorePage() {
                             <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">1</div>
                             <h3 className="text-lg font-medium text-slate-900 dark:text-white">Source Configuration</h3>
                         </div>
-                        <InputRow label="Repository Path" icon="folder_open" val={repo} set={setRepo} placeholder="C:\Users\You\Desktop\MyBackups" browseTarget="repo" />
+                        <InputRow label="Repository Path" icon="folder_open" val={repo} set={setRepo} placeholder={detectedOS === 'windows' ? 'C:\\Users\\You\\Desktop\\MyBackups' : '~/Desktop/MyBackups'} browseTarget="repo" />
                         <InputRow label="Snapshot ID" icon="qr_code_2" val={snapId} set={setSnapId} placeholder="e.g. 8f4a2b1c" mono />
                     </div>
 
@@ -84,7 +91,7 @@ export default function RestorePage() {
                             <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">2</div>
                             <h3 className="text-lg font-medium text-slate-900 dark:text-white">Destination &amp; Security</h3>
                         </div>
-                        <InputRow label="Restore Destination Path" icon="drive_file_move" val={dest} set={setDest} placeholder="C:\Users\You\Desktop\Restored" browseTarget="dest" />
+                        <InputRow label="Restore Destination Path" icon="drive_file_move" val={dest} set={setDest} placeholder={detectedOS === 'windows' ? 'C:\\Users\\You\\Desktop\\Restored' : '~/Desktop/Restored'} browseTarget="dest" />
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Repository Passphrase</label>
                             <div className="relative flex items-center">

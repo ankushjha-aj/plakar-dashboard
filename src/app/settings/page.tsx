@@ -1,8 +1,16 @@
 'use client';
 import { useEffect, useState } from 'react';
 
+interface StatusInfo {
+    installed: boolean;
+    version: string;
+    path: string;
+    os: 'windows' | 'macos' | 'linux';
+    arch: string;
+}
+
 export default function SettingsPage() {
-    const [status, setStatus] = useState<{ installed: boolean; version: string; path: string } | null>(null);
+    const [status, setStatus] = useState<StatusInfo | null>(null);
 
     useEffect(() => {
         fetch('/api/plakar/status').then(r => r.json()).then(setStatus).catch(() => { });
@@ -29,8 +37,8 @@ export default function SettingsPage() {
                     </div>
                     {status && (
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${status.installed
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800'
-                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800'
                             }`}>
                             <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${status.installed ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                             {status.installed ? 'Detected' : 'Not Found'}
@@ -54,7 +62,7 @@ export default function SettingsPage() {
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <span className="material-icons-round text-slate-400 text-sm">memory</span>
                                 </div>
-                                <input readOnly value="windows/amd64" className="block w-full pl-10 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white font-mono py-2.5" />
+                                <input readOnly value={status ? `${status.os}/${status.arch}` : 'Loading...'} className="block w-full pl-10 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white font-mono py-2.5" />
                             </div>
                         </div>
                     </div>
@@ -67,6 +75,23 @@ export default function SettingsPage() {
                         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">This is the binary currently being used by the dashboard for operations.</p>
                     </div>
                 </div>
+
+                {/* CLI Not Installed — Install Guidance */}
+                {status && !status.installed && (
+                    <div className="px-6 py-5 border-t border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
+                        <div className="flex items-start gap-3">
+                            <span className="material-icons-round text-amber-500 mt-0.5">warning</span>
+                            <div>
+                                <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">CLI Not Detected</h4>
+                                <p className="text-sm text-amber-700/80 dark:text-amber-400/70 leading-relaxed">
+                                    {status.os === 'windows' && 'Download the PowerShell installer from the Dashboard page, or manually download from GitHub releases.'}
+                                    {status.os === 'macos' && 'Install via Homebrew: brew install plakar — or download from GitHub releases.'}
+                                    {status.os === 'linux' && 'Install via your package manager (apt/dnf) or download from GitHub releases.'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* About */}

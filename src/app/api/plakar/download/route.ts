@@ -47,8 +47,8 @@ export async function POST(request: Request) {
 
         // Clean up
         try {
-            const { execSync } = require('child_process');
-            execSync(`rmdir /s /q "${tmpDir}"`, { windowsHide: true });
+            const fs = require('fs');
+            fs.rmSync(tmpDir, { recursive: true, force: true });
         } catch { /* ignore */ }
 
         return new Response(fileBuffer, {

@@ -4,15 +4,46 @@ import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 
 interface RepoInfo { path: string; name: string; createdAt: string; }
+interface StatusInfo {
+  installed: boolean;
+  version: string;
+  path: string;
+  os: 'windows' | 'macos' | 'linux';
+  arch: string;
+}
 
 export default function DashboardPage() {
-  const [status, setStatus] = useState<{ installed: boolean; version: string; path: string } | null>(null);
+  const [status, setStatus] = useState<StatusInfo | null>(null);
   const [repos, setRepos] = useState<RepoInfo[]>([]);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetch('/api/plakar/status').then(r => r.json()).then(setStatus).catch(() => { });
     fetch('/api/plakar/repos').then(r => r.json()).then(d => setRepos(d.repos || [])).catch(() => { });
   }, []);
+
+  const downloadInstallScript = async (file: 'ps1' | 'readme') => {
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/plakar/install-scripts?file=${file}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file === 'ps1' ? 'install-plakar.ps1' : 'install-plakar-readme.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
+    setDownloading(false);
+  };
+
+  /** Returns OS-appropriate path placeholder */
+  const examplePath = (name: string) => {
+    if (status?.os === 'macos' || status?.os === 'linux') return `~/Desktop/${name}`;
+    return `C:\\Users\\You\\Desktop\\${name}`;
+  };
 
   return (
     <div className="animate-fade-in-up">
@@ -57,6 +88,119 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── CLI Not Found Banner ─── */}
+      {status && !status.installed && (
+        <div className="mb-10 lg:mb-14 animate-fade-in-up">
+          <div className="rounded-2xl border-2 border-red-300/50 dark:border-red-500/20 bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 dark:from-red-950/30 dark:via-orange-950/20 dark:to-amber-950/10 p-6 lg:p-8 relative overflow-hidden">
+            {/* Decorative gradient blob */}
+            <div className="absolute -top-20 -right-20 w-60 h-60 bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-full blur-3xl" />
+
+            <div className="relative z-10">
+              <div className="flex items-start gap-4 mb-5">
+                <div className="w-12 h-12 rounded-xl bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="material-icons-round text-2xl text-red-500">error_outline</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-red-700 dark:text-red-400 mb-1">
+                    Plakar CLI Not Found
+                  </h3>
+                  <p className="text-sm text-red-600/80 dark:text-red-300/70 leading-relaxed">
+                    The Plakar CLI binary was not detected on your system. Install it to enable backup, restore, and snapshot operations.
+                  </p>
+                </div>
+              </div>
+
+              {/* OS-specific instructions */}
+              {status.os === 'windows' && (
+                <div className="space-y-4">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="material-icons-round text-sm align-middle mr-1 text-blue-500">computer</span>
+                    Windows Installation
+                  </p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Download and run the PowerShell installer script. It will download the latest Plakar binary, install it to <code className="text-xs px-1.5 py-0.5 rounded bg-white/70 dark:bg-white/10 text-indigo-600 dark:text-indigo-400 font-mono">%USERPROFILE%\plakar-cli</code>, and add it to your PATH.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => downloadInstallScript('ps1')}
+                      disabled={downloading}
+                      className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/25 hover:-translate-y-0.5 hover:shadow-blue-500/40 transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      <span className="material-icons-round text-lg">download</span>
+                      {downloading ? 'Downloading...' : 'Install Plakar (Windows)'}
+                    </button>
+                    <button
+                      onClick={() => downloadInstallScript('readme')}
+                      className="inline-flex items-center gap-2 px-5 py-3 glass-card rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all cursor-pointer"
+                    >
+                      <span className="material-icons-round text-lg">description</span>
+                      Download README
+                    </button>
+                  </div>
+                  <div className="mt-3 p-3 rounded-xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono leading-relaxed">
+                      <span className="text-slate-400 select-none">$</span> powershell -ExecutionPolicy Bypass -File install-plakar.ps1
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {status.os === 'macos' && (
+                <div className="space-y-4">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="material-icons-round text-sm align-middle mr-1 text-slate-500">laptop_mac</span>
+                    macOS Installation
+                  </p>
+                  <div className="space-y-2">
+                    <div className="p-3 rounded-xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                      <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">Via Homebrew (recommended)</p>
+                      <code className="text-sm text-indigo-600 dark:text-indigo-400 font-mono">brew install plakar</code>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                      <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">Via curl</p>
+                      <code className="text-xs text-indigo-600 dark:text-indigo-400 font-mono break-all">
+                        curl -sSfL https://github.com/PlakarKorp/plakar/releases/latest/download/plakar_darwin_amd64.tar.gz | tar xz -C /usr/local/bin
+                      </code>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    After installing, restart your terminal and verify with: <code className="font-mono text-indigo-500">plakar version</code>
+                  </p>
+                </div>
+              )}
+
+              {status.os === 'linux' && (
+                <div className="space-y-4">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="material-icons-round text-sm align-middle mr-1 text-amber-500">terminal</span>
+                    Linux Installation
+                  </p>
+                  <div className="space-y-2">
+                    <div className="p-3 rounded-xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                      <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">Debian / Ubuntu (apt)</p>
+                      <code className="text-sm text-indigo-600 dark:text-indigo-400 font-mono">sudo apt install plakar</code>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                      <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">RHEL / Fedora (yum/dnf)</p>
+                      <code className="text-sm text-indigo-600 dark:text-indigo-400 font-mono">sudo dnf install plakar</code>
+                    </div>
+                    <div className="p-3 rounded-xl bg-white/50 dark:bg-white/5 border border-slate-200/50 dark:border-white/5">
+                      <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">Via curl (universal)</p>
+                      <code className="text-xs text-indigo-600 dark:text-indigo-400 font-mono break-all">
+                        curl -sSfL https://github.com/PlakarKorp/plakar/releases/latest/download/plakar_linux_amd64.tar.gz | sudo tar xz -C /usr/local/bin
+                      </code>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    After installing, restart your terminal and verify with: <code className="font-mono text-indigo-500">plakar version</code>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Quick Actions ─── */}
       <div className="mb-10 lg:mb-14">

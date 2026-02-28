@@ -1,22 +1,83 @@
-import { execFileSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 import os from 'os';
 
 /**
- * Locates the plakar.exe binary on the system.
+ * Returns the current OS as a simple string.
+ */
+export function getOS(): 'windows' | 'macos' | 'linux' {
+  switch (process.platform) {
+    case 'win32':
+      return 'windows';
+    case 'darwin':
+      return 'macos';
+    default:
+      return 'linux';
+  }
+}
+
+/**
+ * Returns the system architecture (e.g. x64, arm64).
+ */
+export function getArchitecture(): string {
+  return process.arch; // 'x64', 'arm64', 'ia32', etc.
+}
+
+/**
+ * Locates the plakar binary on the system (cross-platform).
+ * Checks well-known paths first, then falls back to PATH lookup.
  */
 export function findPlakarPath(): string | null {
   const homeDir = os.homedir();
-  const knownPaths = [
-    path.join(homeDir, 'plakar-cli', 'plakar.exe'),
-    path.join(homeDir, 'plakar-cli', 'plakar'),
-  ];
+  const platform = getOS();
+
+  // Platform-specific known paths
+  const knownPaths: string[] = [];
+
+  if (platform === 'windows') {
+    knownPaths.push(
+      path.join(homeDir, 'plakar-cli', 'plakar.exe'),
+      path.join(homeDir, 'plakar-cli', 'plakar'),
+    );
+  } else if (platform === 'macos') {
+    knownPaths.push(
+      '/usr/local/bin/plakar',
+      '/opt/homebrew/bin/plakar',
+      path.join(homeDir, 'plakar-cli', 'plakar'),
+      path.join(homeDir, '.local', 'bin', 'plakar'),
+    );
+  } else {
+    // Linux
+    knownPaths.push(
+      '/usr/local/bin/plakar',
+      '/usr/bin/plakar',
+      path.join(homeDir, 'plakar-cli', 'plakar'),
+      path.join(homeDir, '.local', 'bin', 'plakar'),
+    );
+  }
 
   for (const p of knownPaths) {
     if (existsSync(p)) {
       return p;
     }
+  }
+
+  // Fallback: search PATH
+  try {
+    const cmd = platform === 'windows' ? 'where plakar' : 'which plakar';
+    const result = execSync(cmd, {
+      encoding: 'utf-8',
+      timeout: 5000,
+      windowsHide: true,
+    }).trim();
+    // 'where' on Windows may return multiple lines; take the first
+    const firstLine = result.split('\n')[0].trim();
+    if (firstLine && existsSync(firstLine)) {
+      return firstLine;
+    }
+  } catch {
+    // Not found in PATH
   }
 
   return null;

@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
-import { runPlakar, findPlakarPath } from '@/lib/plakar';
+import { runPlakar, findPlakarPath, getOS, getArchitecture } from '@/lib/plakar';
 
 export async function GET() {
     const plakarPath = findPlakarPath();
+    const os = getOS();
+    const arch = getArchitecture();
 
     if (!plakarPath) {
         return NextResponse.json({
             installed: false,
             version: null,
             path: null,
+            os,
+            arch,
             error: 'plakar executable not found.',
         });
     }
@@ -24,6 +28,8 @@ export async function GET() {
         installed: result.success,
         version: versionMatch ? versionMatch[1] : null,
         path: plakarPath,
+        os,
+        arch,
         raw: result.stdout + result.stderr,
     });
 }

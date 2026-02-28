@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ThemeToggle from '@/components/ThemeToggle';
 
-export default function BackupPage() {
+type OSType = 'windows' | 'macos' | 'linux';
+
+function BackupPageContent() {
+    const [detectedOS, setDetectedOS] = useState<OSType>('windows');
     const searchParams = useSearchParams();
     const [repository, setRepository] = useState('');
     const [source, setSource] = useState('');
@@ -24,6 +27,7 @@ export default function BackupPage() {
         if (qr) setRepository(qr);
         const init = searchParams.get('init');
         if (init === 'true') setInitMode(true);
+        fetch('/api/plakar/status').then(r => r.json()).then(d => { if (d.os) setDetectedOS(d.os); }).catch(() => { });
     }, [searchParams]);
 
     const openNativePicker = async (target: 'repo' | 'source') => {
@@ -131,7 +135,7 @@ export default function BackupPage() {
                             </label>
                             <div className="flex rounded-xl overflow-hidden glass-card">
                                 <input type="text" value={repository} onChange={(e) => setRepository(e.target.value)}
-                                    placeholder="e.g. C:\Users\You\Desktop\MyBackups"
+                                    placeholder={detectedOS === 'windows' ? 'e.g. C:\\Users\\You\\Desktop\\MyBackups' : 'e.g. ~/Desktop/MyBackups'}
                                     className="flex-1 px-4 py-3.5 text-sm bg-transparent border-0 text-slate-900 dark:text-white focus:ring-0 focus:outline-none placeholder:text-slate-400"
                                 />
                                 <button onClick={() => openNativePicker('repo')} disabled={browsing}
@@ -152,7 +156,7 @@ export default function BackupPage() {
                                 </label>
                                 <div className="flex rounded-xl overflow-hidden glass-card">
                                     <input type="text" value={source} onChange={(e) => setSource(e.target.value)}
-                                        placeholder="e.g. C:\Users\You\Documents"
+                                        placeholder={detectedOS === 'windows' ? 'e.g. C:\\Users\\You\\Documents' : 'e.g. ~/Documents'}
                                         className="flex-1 px-4 py-3.5 text-sm bg-transparent border-0 text-slate-900 dark:text-white focus:ring-0 focus:outline-none placeholder:text-slate-400"
                                     />
                                     <button onClick={() => openNativePicker('source')} disabled={browsing}
@@ -215,5 +219,13 @@ export default function BackupPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function BackupPage() {
+    return (
+        <Suspense fallback={<div className="animate-pulse text-center py-20 text-slate-400">Loading...</div>}>
+            <BackupPageContent />
+        </Suspense>
     );
 }
