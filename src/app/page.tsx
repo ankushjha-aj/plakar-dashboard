@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import ThemeToggle from '@/components/ThemeToggle';
+
 
 interface RepoInfo { path: string; name: string; createdAt: string; }
 interface StatusInfo {
@@ -42,29 +42,6 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-in-up">
 
-      {/* ─── Top status bar ─── */}
-      <div className="flex items-center justify-between mb-4 lg:mb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50" />
-          <span className="text-xs font-bold text-emerald-500 uppercase tracking-[0.15em]">System Online</span>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <ThemeToggle />
-          <Link
-            href="/compare"
-            className="glass-card px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all flex items-center gap-2"
-          >
-            <span className="material-icons-round text-sm">compare</span>
-            <span className="hidden sm:inline">Compare</span>
-          </Link>
-          {status && (
-            <div className={`glass-card flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold ${status.installed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-              <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${status.installed ? 'bg-emerald-500 animate-pulse shadow-lg shadow-emerald-500/50' : 'bg-red-500'}`} />
-              CLI {status.installed ? `v${status.version}` : 'N/A'}
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* ─── Hero ─── */}
       <section className="mb-16 lg:mb-20">
@@ -72,12 +49,11 @@ export default function DashboardPage() {
           <div className="mb-5 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800">
             <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">by Ankush</span>
           </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white mb-5 lg:mb-6 tracking-tight leading-[1.08]">
-            Secure your data with{' '}
-            <span className="text-gradient">Plakar</span>
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white mb-5 lg:mb-6 tracking-tight leading-[1.08] whitespace-nowrap">
+            Secure your data with <span className="text-gradient">Plakar</span>
           </h1>
           <p className="text-lg sm:text-xl text-slate-500 dark:text-slate-400 leading-relaxed mb-8 lg:mb-10 max-w-2xl">
-            The Open Source standard for unified resilience. Secure your Cloud, SaaS, and On-Prem data with native zero-trust encryption and enterprise-grade architecture.
+            The Open Source standard for unified resilience.Secure your Cloud, SaaS & On-Prem with zero-trust encryption. <br />
           </p>
           <div className="flex flex-wrap gap-4">
             <Link
