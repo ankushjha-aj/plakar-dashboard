@@ -149,10 +149,10 @@ export default function RestorePage() {
     );
 
     return (
-        <div className="animate-fade-in-up max-w-3xl mx-auto">
+        <div className="animate-fade-in-up w-full">
             <div className="text-center space-y-2 mb-10">
                 <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">Restore Data</h1>
-                <p className="text-slate-500 dark:text-slate-400 max-w-lg mx-auto">Recover files from your encrypted snapshots. Select a source repository and define your destination.</p>
+                <p className="text-slate-500 dark:text-slate-400">Recover files from your encrypted snapshots. Select a source repository and define your destination.</p>
             </div>
 
             {result && (

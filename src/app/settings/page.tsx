@@ -17,7 +17,7 @@ export default function SettingsPage() {
     }, []);
 
     return (
-        <div className="animate-fade-in-up max-w-4xl mx-auto space-y-8">
+        <div className="animate-fade-in-up w-full space-y-8">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Settings</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your Plakar configuration and preferences.</p>

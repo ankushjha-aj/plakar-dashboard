@@ -28,57 +28,61 @@ export async function POST(request: Request) {
         });
     }
 
-    // Parse ls output: "2026-02-10T14:40:57Z -rw-rw-rw-  0  0  1.1 KiB /path/to/file"
+    // Parse ls output: "2026-02-10T14:40:57Z drwxr-xr-x  501  20  1.1 KiB /path/to/file"
+    // Fields: date, permissions, uid, gid, size, path
     const allFiles = result.stdout
         .trim()
         .split('\n')
         .filter((l) => l.trim().length > 0)
         .map((line) => {
             const match = line.match(
-                /^(\S+)\s+(\S+)\s+\d+\s+\d+\s+([\d.]+\s+\w+)\s+(.+)$/
+                /^(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+([\d.]+\s+\w+)\s+(.+)$/
             );
             if (match) {
                 return {
                     date: match[1],
                     permissions: match[2],
-                    size: match[3].trim(),
-                    path: match[4].trim(),
-                    name: match[4].trim().split('/').pop() || match[4].trim(),
+                    uid: match[3],
+                    gid: match[4],
+                    size: match[5].trim(),
+                    path: match[6].trim(),
+                    name: match[6].trim().split('/').pop() || match[6].trim(),
                     isDir: match[2].startsWith('d'),
                 };
             }
             // Fallback: just return the raw line
-            return { date: '', permissions: '', size: '', path: line.trim(), name: line.trim(), isDir: false };
+            return { date: '', permissions: '', uid: '', gid: '', size: '', path: line.trim(), name: line.trim(), isDir: false };
         });
 
     // Determine the base path (the root of the snapshot content)
-    // Find the common prefix to show only top-level items relative to the browse path
     const browsePath = subPath || '';
 
     // Group files: show only direct children of the browsePath
-    const directChildren = new Map<string, { date: string; permissions: string; size: string; path: string; name: string; isDir: boolean }>();
+    const directChildren = new Map<string, { date: string; permissions: string; uid: string; gid: string; size: string; path: string; name: string; isDir: boolean }>();
+
+    // Track metadata for current directory
+    let dirMeta = { date: '', permissions: '', uid: '', gid: '' };
 
     for (const f of allFiles) {
-        // Get the path relative to browseBase
         const filePath = f.path;
-
-        // Strip leading slash for comparison
         const normalizedPath = filePath.replace(/^\//, '');
         const normalizedBase = browsePath.replace(/^\//, '').replace(/\/$/, '');
 
-        // Get relative path from the base
         let relativePath: string;
         if (normalizedBase && normalizedPath.startsWith(normalizedBase)) {
             relativePath = normalizedPath.substring(normalizedBase.length).replace(/^\//, '');
         } else if (!normalizedBase) {
             relativePath = normalizedPath;
         } else {
-            continue; // Not under our browse path
+            continue;
         }
 
-        if (!relativePath) continue;
+        if (!relativePath) {
+            // This is the current directory itself — capture its metadata
+            dirMeta = { date: f.date, permissions: f.permissions, uid: f.uid, gid: f.gid };
+            continue;
+        }
 
-        // Get the first path segment (direct child)
         const segments = relativePath.split('/').filter(Boolean);
         if (segments.length === 0) continue;
 
@@ -86,17 +90,17 @@ export async function POST(request: Request) {
 
         if (!directChildren.has(topSegment)) {
             if (segments.length === 1 && !f.isDir) {
-                // It's a direct file child
                 directChildren.set(topSegment, {
                     ...f,
                     name: topSegment,
                 });
             } else {
-                // It's a directory (either explicitly or has children)
                 const dirPath = normalizedBase ? `/${normalizedBase}/${topSegment}` : `/${topSegment}`;
                 directChildren.set(topSegment, {
                     date: f.date,
                     permissions: 'd' + f.permissions.substring(1),
+                    uid: f.uid,
+                    gid: f.gid,
                     size: '',
                     path: dirPath,
                     name: topSegment,
@@ -113,5 +117,5 @@ export async function POST(request: Request) {
         return a.name.localeCompare(b.name);
     });
 
-    return NextResponse.json({ success: true, files });
+    return NextResponse.json({ success: true, files, dirMeta });
 }

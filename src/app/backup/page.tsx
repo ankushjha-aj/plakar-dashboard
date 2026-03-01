@@ -146,7 +146,7 @@ function BackupPageContent() {
             </div>
 
             {/* Header */}
-            <div className="text-center z-10 w-full max-w-2xl mb-8">
+            <div className="text-center z-10 w-full mb-8">
                 <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#1e2330] dark:text-white mb-2">
                     Manage Your Backups
                 </h1>
@@ -156,7 +156,7 @@ function BackupPageContent() {
             </div>
 
             {/* Main White Card */}
-            <div className="bg-white dark:bg-[#0f172a] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-slate-100 dark:border-white/5 rounded-2xl w-full max-w-[640px] z-10 p-6 sm:p-8 relative">
+            <div className="bg-white dark:bg-[#0f172a] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-slate-100 dark:border-white/5 rounded-2xl w-full z-10 p-6 sm:p-8 relative">
 
                 {/* Alert Notification */}
                 {result && (
@@ -323,7 +323,7 @@ function BackupPageContent() {
             </div>
 
             {/* Footer Status Indicators */}
-            <div className="w-full max-w-[640px] px-2 py-4 flex justify-between items-center text-[12px] font-medium z-10">
+            <div className="w-full px-2 py-4 flex justify-between items-center text-[12px] font-medium z-10">
                 <div className="flex items-center gap-2 text-slate-500">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" />
                     Local Mode: <span className="text-slate-800 dark:text-slate-200 font-bold">Active</span>

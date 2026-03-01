@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense, use } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 interface Snap { timestamp: string; snapshotId: string; size: string; duration: string; path: string; }
-interface SnapFile { date: string; permissions: string; size: string; path: string; name: string; isDir: boolean; }
+interface SnapFile { date: string; permissions: string; uid: string; gid: string; size: string; path: string; name: string; isDir: boolean; }
 
 function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -32,6 +32,10 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
     const [fbLoading, setFbLoading] = useState(false);
     const [fbError, setFbError] = useState('');
     const [fbBrowsePath, setFbBrowsePath] = useState('');
+    const [fbSearch, setFbSearch] = useState('');
+    const [fbPage, setFbPage] = useState(1);
+    const fbPerPage = 50;
+    const [fbDirMeta, setFbDirMeta] = useState<{ date: string; permissions: string; uid: string; gid: string }>({ date: '', permissions: '', uid: '', gid: '' });
 
     // If no repoPath is provided, redirect back to repositories
     useEffect(() => {
@@ -113,7 +117,7 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
 
     const openFileBrowser = async (snap: Snap, subPath = '') => {
         if (!repoPath) return;
-        setFbSnap(snap); setFbFiles([]); setFbError(''); setFbOpen(true); setFbLoading(true); setFbBrowsePath(subPath);
+        setFbSnap(snap); setFbFiles([]); setFbError(''); setFbOpen(true); setFbLoading(true); setFbBrowsePath(subPath); setFbSearch(''); setFbPage(1);
         try {
             const r = await fetch('/api/plakar/snapshot-files', {
                 method: 'POST',
@@ -121,7 +125,10 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
                 body: JSON.stringify({ repository: repoPath, snapshotId: snap.snapshotId, passphrase, subPath })
             });
             const d = await r.json();
-            if (d.success) setFbFiles(d.files);
+            if (d.success) {
+                setFbFiles(d.files);
+                if (d.dirMeta) setFbDirMeta(d.dirMeta);
+            }
             else setFbError(d.error || 'Failed to load files.');
         } catch { setFbError('Network error.'); }
         setFbLoading(false);
@@ -129,6 +136,8 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
 
     const browseTo = (dirPath: string) => {
         if (!fbSnap) return;
+        setFbSearch('');
+        setFbPage(1);
         openFileBrowser(fbSnap, dirPath);
     };
 
@@ -171,7 +180,7 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
 
     return (
         <div className="relative min-h-[calc(100vh-4rem)] bg-[#f8fafc] dark:bg-[#090b14] p-4 sm:p-8 font-sans">
-            <div className="max-w-7xl mx-auto relative z-10 w-full animate-fade-in-up">
+            <div className="relative z-10 w-full animate-fade-in-up">
 
                 {isUnlocked && (
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
@@ -400,126 +409,268 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
                     </div>
                 )}
 
-                {/* File Browser Modal (Redesigned) */}
-                {fbOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in-scale" onClick={() => setFbOpen(false)}>
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col overflow-hidden h-[85vh] border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                {/* File Browser Modal (Enhanced — matching Plakar UI) */}
+                {fbOpen && (() => {
+                    // Compute folder name from browse path or snapshot path
+                    const currentFolderName = fbBrowsePath
+                        ? fbBrowsePath.split('/').filter(Boolean).pop() || 'Root'
+                        : (fbSnap?.path ? fbSnap.path.split('/').filter(Boolean).pop() || 'Root' : 'Root');
 
-                            {/* Modal Header */}
-                            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-[#0f172a]">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-                                        <span className="material-icons-round text-indigo-500">folder_open</span>
-                                        Snapshot <span className="font-mono text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded-md">{fbSnap?.snapshotId}</span>
-                                        {!fbLoading && <span className="text-xs font-bold text-slate-400 ml-1">({fbFiles.length} item{fbFiles.length !== 1 ? 's' : ''})</span>}
-                                    </h2>
-                                    {/* Breadcrumb Navigation */}
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                        <button onClick={() => fbSnap && openFileBrowser(fbSnap, '')} className={`text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${!fbBrowsePath ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
-                                            <span className="material-icons-round text-[14px] align-middle">home</span> Root
+                    // Version dropdown: all snapshots that share the same backed-up path
+                    const snapshotPath = fbSnap?.path || '';
+                    const versions = snapshots.filter(s => s.path === snapshotPath).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+                    // Filter files by search
+                    const filteredFiles = fbSearch
+                        ? fbFiles.filter(f => f.name.toLowerCase().includes(fbSearch.toLowerCase()))
+                        : fbFiles;
+
+                    // Pagination
+                    const totalPages = Math.max(1, Math.ceil(filteredFiles.length / fbPerPage));
+                    const pagedFiles = filteredFiles.slice((fbPage - 1) * fbPerPage, fbPage * fbPerPage);
+
+                    // Relative time helper
+                    const relativeTime = (ts: string) => {
+                        const diff = Date.now() - new Date(ts).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        if (mins < 1) return 'just now';
+                        if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+                        const hrs = Math.floor(mins / 60);
+                        if (hrs < 24) return `about ${hrs} hour${hrs > 1 ? 's' : ''} ago`;
+                        const days = Math.floor(hrs / 24);
+                        return `${days} day${days > 1 ? 's' : ''} ago`;
+                    };
+
+                    return (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in-scale" onClick={() => setFbOpen(false)}>
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col overflow-hidden h-[90vh] border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+
+                                {/* ── Breadcrumb Bar ── */}
+                                <div className="px-6 py-2.5 bg-slate-50 dark:bg-[#0b1120] border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 flex-wrap text-xs">
+                                    <button onClick={() => setFbOpen(false)} className="text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 font-bold cursor-pointer">Snapshots</button>
+                                    <span className="text-slate-300 dark:text-slate-600">{'>'}</span>
+                                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{fbSnap?.snapshotId?.substring(0, 8)}</span>
+                                    {fbBrowsePath && fbBrowsePath.split('/').filter(Boolean).map((seg, i, arr) => {
+                                        const segPath = '/' + arr.slice(0, i + 1).join('/');
+                                        const isLast = i === arr.length - 1;
+                                        return (
+                                            <span key={segPath} className="flex items-center gap-1.5">
+                                                <span className="text-slate-300 dark:text-slate-600">{'>'}</span>
+                                                <button
+                                                    onClick={() => !isLast && browseTo(segPath)}
+                                                    className={`font-bold ${isLast ? 'text-slate-700 dark:text-slate-300' : 'text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer'}`}
+                                                >
+                                                    {seg}
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* ── Folder Title & Metadata ── */}
+                                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0f172a]">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h2 className="text-xl font-black text-slate-900 dark:text-white">{currentFolderName}</h2>
+                                        <button onClick={() => setFbOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                                            <span className="material-icons-round text-[20px]">close</span>
                                         </button>
-                                        {fbBrowsePath && fbBrowsePath.split('/').filter(Boolean).map((seg, i, arr) => {
-                                            const segPath = '/' + arr.slice(0, i + 1).join('/');
-                                            const isLast = i === arr.length - 1;
-                                            return (
-                                                <span key={segPath} className="flex items-center gap-1">
-                                                    <span className="text-slate-300 dark:text-slate-600 text-xs">/</span>
-                                                    <button
-                                                        onClick={() => !isLast && browseTo(segPath)}
-                                                        className={`text-xs font-bold px-1.5 py-0.5 rounded transition-colors ${isLast ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer'}`}
-                                                    >
-                                                        {seg}
-                                                    </button>
-                                                </span>
-                                            );
-                                        })}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+                                        {fbDirMeta.date && (
+                                            <div>
+                                                <span className="text-slate-400 dark:text-slate-500 block">Last modified</span>
+                                                <span className="font-bold text-slate-700 dark:text-slate-300">{new Date(fbDirMeta.date).toLocaleString('sv-SE').replace(' ', ' ')}</span>
+                                            </div>
+                                        )}
+                                        {fbDirMeta.permissions && (
+                                            <div>
+                                                <span className="text-slate-400 dark:text-slate-500 block">Mode</span>
+                                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{fbDirMeta.permissions}</span>
+                                            </div>
+                                        )}
+                                        {fbDirMeta.uid && (
+                                            <div>
+                                                <span className="text-slate-400 dark:text-slate-500 block">Owner user</span>
+                                                <span className="font-bold text-slate-700 dark:text-slate-300">{fbDirMeta.uid}</span>
+                                            </div>
+                                        )}
+                                        {fbDirMeta.gid && (
+                                            <div>
+                                                <span className="text-slate-400 dark:text-slate-500 block">Owner group</span>
+                                                <span className="font-bold text-slate-700 dark:text-slate-300">{fbDirMeta.gid}</span>
+                                            </div>
+                                        )}
+                                        {/* Version Dropdown */}
+                                        {versions.length > 0 && (
+                                            <div className="relative group/ver">
+                                                <span className="text-slate-400 dark:text-slate-500 block">Version</span>
+                                                <button className="font-mono font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400">
+                                                    {fbSnap?.snapshotId?.substring(0, 8)}
+                                                    <span className="material-icons-round text-[14px]">arrow_drop_down</span>
+                                                </button>
+                                                <div className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover/ver:opacity-100 group-hover/ver:visible transition-all z-30 overflow-hidden">
+                                                    {versions.map((v, vi) => {
+                                                        const isCurrent = v.snapshotId === fbSnap?.snapshotId;
+                                                        const isNewer = vi > 0;
+                                                        return (
+                                                            <button
+                                                                key={v.snapshotId}
+                                                                onClick={() => !isCurrent && openFileBrowser(v, fbBrowsePath)}
+                                                                className={`w-full px-4 py-2.5 flex items-center gap-3 text-left text-sm transition-colors ${isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer'}`}
+                                                            >
+                                                                <span className={`material-icons-round text-[16px] ${isCurrent ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                                                    {isCurrent ? 'radio_button_checked' : 'schedule'}
+                                                                </span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{v.snapshotId.substring(0, 8)}</span>
+                                                                    {isNewer && <span className="text-[10px] font-bold text-slate-400 ml-2">No changes</span>}
+                                                                </div>
+                                                                <span className="text-[11px] text-slate-400 dark:text-slate-500 whitespace-nowrap">{relativeTime(v.timestamp)}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+
+                                {/* ── Search + Filter Bar ── */}
+                                <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-white dark:bg-[#0f172a]">
+                                    <div className="relative flex-1 max-w-xs">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons-round text-slate-400 text-[18px]">search</span>
+                                        <input
+                                            type="text"
+                                            value={fbSearch}
+                                            onChange={e => { setFbSearch(e.target.value); setFbPage(1); }}
+                                            placeholder="Search filename..."
+                                            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
                                     {fbBrowsePath && (
                                         <button onClick={() => {
                                             const parentPath = fbBrowsePath.split('/').filter(Boolean).slice(0, -1).join('/');
                                             browseTo(parentPath ? '/' + parentPath : '');
-                                        }} className="w-10 h-10 rounded-xl flex items-center justify-center text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors cursor-pointer" title="Go Back">
-                                            <span className="material-icons-round">arrow_back</span>
+                                        }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors cursor-pointer">
+                                            <span className="material-icons-round text-[18px]">arrow_back</span>
+                                            Back
                                         </button>
                                     )}
-                                    <button onClick={() => setFbOpen(false)} className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-                                        <span className="material-icons-round">close</span>
-                                    </button>
                                 </div>
-                            </div>
 
-                            {/* Modal Body */}
-                            <div className="flex-1 overflow-y-auto bg-white dark:bg-[#0f172a]">
-                                {fbLoading && (
-                                    <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-                                        <span className="spinner border-2 border-indigo-500/20 border-t-indigo-500 rounded-full w-8 h-8 animate-spin mb-4" />
-                                        <span className="font-bold text-sm">Loading files...</span>
-                                    </div>
-                                )}
-                                {fbError && (
-                                    <div className="m-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 rounded-xl p-4 flex items-center gap-3">
-                                        <span className="material-icons-round">error</span>
-                                        <span className="text-sm font-bold flex-1">{fbError}</span>
-                                    </div>
-                                )}
-                                {!fbLoading && !fbError && fbFiles.length > 0 && (
-                                    <table className="min-w-full">
-                                        <thead className="sticky top-0 z-10 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 text-[11px] font-black text-[#64748b] dark:text-slate-500 uppercase tracking-widest">
-                                            <tr>
-                                                <th className="px-6 py-3 text-left">Name</th>
-                                                <th className="px-6 py-3 text-left">Size</th>
-                                                <th className="px-6 py-3 text-left">Date</th>
-                                                <th className="px-6 py-3 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                                            {fbFiles.map((f, i) => (
-                                                <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                                                    <td className="px-6 py-3.5 whitespace-nowrap">
-                                                        <div
-                                                            className={`flex items-center gap-3 text-sm font-medium text-slate-800 dark:text-slate-200 ${f.isDir ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''}`}
-                                                            onClick={() => f.isDir && browseTo(f.path)}
-                                                        >
-                                                            <span className={`material-icons-round text-lg ${f.isDir ? 'text-indigo-500' : 'text-slate-400'}`}>
-                                                                {f.isDir ? 'folder' : 'description'}
-                                                            </span>
-                                                            <span className="truncate max-w-[320px]" title={f.path}>{f.name}</span>
-                                                            {f.isDir && <span className="material-icons-round text-slate-300 dark:text-slate-600 text-sm">chevron_right</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-3.5 whitespace-nowrap text-[13px] font-bold text-slate-600 dark:text-slate-400">{f.size}</td>
-                                                    <td className="px-6 py-3.5 whitespace-nowrap text-[13px] font-bold text-slate-600 dark:text-slate-400">{f.date ? new Date(f.date).toLocaleDateString() : '-'}</td>
-                                                    <td className="px-6 py-3.5 whitespace-nowrap text-right">
-                                                        {!f.isDir && (
-                                                            <button
-                                                                onClick={() => downloadFile(f.path)}
-                                                                className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-lg flex items-center justify-center text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-all ml-auto cursor-pointer"
-                                                                title="Download File"
-                                                            >
-                                                                <span className="material-icons-round text-[18px]">download</span>
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                                {!fbLoading && fbFiles.length === 0 && !fbError && (
-                                    <div className="py-24 text-center">
-                                        <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-300 dark:text-slate-600">
-                                            <span className="material-icons-round text-3xl">topic</span>
+                                {/* ── Modal Body ── */}
+                                <div className="flex-1 overflow-y-auto bg-white dark:bg-[#0f172a]">
+                                    {fbLoading && (
+                                        <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+                                            <span className="spinner border-2 border-indigo-500/20 border-t-indigo-500 rounded-full w-8 h-8 animate-spin mb-4" />
+                                            <span className="font-bold text-sm">Loading files...</span>
                                         </div>
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-1">No files found</h3>
-                                        <p className="text-slate-500 text-sm">This snapshot appears to be empty.</p>
+                                    )}
+                                    {fbError && (
+                                        <div className="m-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 rounded-xl p-4 flex items-center gap-3">
+                                            <span className="material-icons-round">error</span>
+                                            <span className="text-sm font-bold flex-1">{fbError}</span>
+                                        </div>
+                                    )}
+                                    {!fbLoading && !fbError && filteredFiles.length > 0 && (
+                                        <table className="min-w-full">
+                                            <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 text-[11px] font-black text-[#64748b] dark:text-slate-500 uppercase tracking-widest">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left w-[50%]">Name</th>
+                                                    <th className="px-4 py-3 text-left">Size</th>
+                                                    <th className="px-4 py-3 text-left">Modified</th>
+                                                    <th className="px-4 py-3 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                                {/* Parent Directory (..) */}
+                                                {fbBrowsePath && (
+                                                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => {
+                                                        const parentPath = fbBrowsePath.split('/').filter(Boolean).slice(0, -1).join('/');
+                                                        browseTo(parentPath ? '/' + parentPath : '');
+                                                    }}>
+                                                        <td className="px-6 py-3 whitespace-nowrap" colSpan={4}>
+                                                            <div className="flex items-center gap-3 text-sm font-medium text-slate-600 dark:text-slate-400">
+                                                                <span className="material-icons-round text-lg text-indigo-400">folder</span>
+                                                                <span>..</span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {pagedFiles.map((f, i) => (
+                                                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                                                        <td className="px-6 py-3 whitespace-nowrap">
+                                                            <div
+                                                                className={`flex items-center gap-3 text-sm font-medium text-slate-800 dark:text-slate-200 ${f.isDir ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''}`}
+                                                                onClick={() => f.isDir && browseTo(f.path)}
+                                                            >
+                                                                <span className={`material-icons-round text-lg ${f.isDir ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                                                    {f.isDir ? 'folder' : 'description'}
+                                                                </span>
+                                                                <span className="truncate max-w-[350px]" title={f.path}>{f.name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-[13px] font-bold text-slate-500 dark:text-slate-400">{f.size || (f.isDir ? '' : '0 B')}</td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-[13px] font-medium text-slate-500 dark:text-slate-400">
+                                                            {f.date ? new Date(f.date).toLocaleString('sv-SE').replace(' ', ' ') : '-'}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                            {!f.isDir && (
+                                                                <button
+                                                                    onClick={() => downloadFile(f.path)}
+                                                                    className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-lg flex items-center justify-center text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-all ml-auto cursor-pointer"
+                                                                    title="Download File"
+                                                                >
+                                                                    <span className="material-icons-round text-[18px]">download</span>
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                    {!fbLoading && filteredFiles.length === 0 && !fbError && (
+                                        <div className="py-24 text-center">
+                                            <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-300 dark:text-slate-600">
+                                                <span className="material-icons-round text-3xl">topic</span>
+                                            </div>
+                                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-1">{fbSearch ? 'No matching files' : 'No files found'}</h3>
+                                            <p className="text-slate-500 text-sm">{fbSearch ? `No files match "${fbSearch}"` : 'This snapshot appears to be empty.'}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── Footer: Pagination ── */}
+                                {!fbLoading && filteredFiles.length > 0 && (
+                                    <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-[#0b1120] flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+                                        <span>{filteredFiles.length} result{filteredFiles.length !== 1 ? 's' : ''}</span>
+                                        <div className="flex items-center gap-3">
+                                            <span>Display: {fbPerPage}</span>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => setFbPage(Math.max(1, fbPage - 1))}
+                                                    disabled={fbPage <= 1}
+                                                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors cursor-pointer"
+                                                >
+                                                    <span className="material-icons-round text-[16px]">chevron_left</span>
+                                                </button>
+                                                <span className="px-2">Page {fbPage} of {totalPages}</span>
+                                                <button
+                                                    onClick={() => setFbPage(Math.min(totalPages, fbPage + 1))}
+                                                    disabled={fbPage >= totalPages}
+                                                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors cursor-pointer"
+                                                >
+                                                    <span className="material-icons-round text-[16px]">chevron_right</span>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
             </div>
         </div>
     );

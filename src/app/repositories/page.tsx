@@ -154,7 +154,7 @@ export default function RepositoriesPage() {
     };
 
     return (
-        <div className="relative min-h-[calc(100vh-4rem)] bg-[#f8fafc] dark:bg-[#080d1a] px-4 sm:px-6 lg:px-8 py-8 w-full max-w-7xl mx-auto rounded-md">
+        <div className="relative min-h-[calc(100vh-4rem)] bg-[#f8fafc] dark:bg-[#080d1a] px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto rounded-md">
 
             {/* Header: Title + Actions */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 mt-2">
