@@ -10,6 +10,7 @@ export interface SavedRepo {
     path: string;
     name: string;
     createdAt: string;
+    isArchived?: boolean;
 }
 
 function ensureDir() {

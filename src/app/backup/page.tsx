@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 
 type OSType = 'windows' | 'macos' | 'linux';
@@ -20,15 +21,60 @@ function BackupPageContent() {
         message: string;
         snapshotId?: string;
     } | null>(null);
-    const [initMode, setInitMode] = useState(false);
+
+    // Repositories fetched from Plakar
+    const [knownRepos, setKnownRepos] = useState<{ name: string, path: string }[]>([]);
+
+    // Recent source paths from local storage
+    const [recentSources, setRecentSources] = useState<string[]>([]);
+
+    // Previous backup tracking
+    const [lastBackupInfo, setLastBackupInfo] = useState<{ lastBackup: string; snapshotCount: number } | null>(null);
 
     useEffect(() => {
         const qr = searchParams.get('repo');
         if (qr) setRepository(qr);
-        const init = searchParams.get('init');
-        if (init === 'true') setInitMode(true);
         fetch('/api/plakar/status').then(r => r.json()).then(d => { if (d.os) setDetectedOS(d.os); }).catch(() => { });
+
+        // Fetch known repositories to populate the dropdown
+        fetch('/api/plakar/repos')
+            .then(r => r.json())
+            .then(d => {
+                if (d.repos) {
+                    setKnownRepos(d.repos);
+                }
+            })
+            .catch(() => { });
+
+        // Load recent sources from local storage
+        try {
+            const saved = localStorage.getItem('plakarRecentSources');
+            if (saved) {
+                setRecentSources(JSON.parse(saved));
+            }
+        } catch (e) { }
     }, [searchParams]);
+
+    // Fetch backup history when source/repository change
+    useEffect(() => {
+        if (!source || !repository) {
+            setLastBackupInfo(null);
+            return;
+        }
+        fetch(`/api/plakar/backup-history?repo=${encodeURIComponent(repository)}`)
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.history) {
+                    const match = d.history.find((h: { sourcePath: string }) => h.sourcePath === source);
+                    if (match) {
+                        setLastBackupInfo({ lastBackup: match.lastBackup, snapshotCount: match.snapshots.length });
+                    } else {
+                        setLastBackupInfo(null);
+                    }
+                }
+            })
+            .catch(() => setLastBackupInfo(null));
+    }, [source, repository]);
 
     const openNativePicker = async (target: 'repo' | 'source') => {
         setBrowsing(true);
@@ -43,180 +89,249 @@ function BackupPageContent() {
         setBrowsing(false);
     };
 
-    const handleCreateRepo = async () => {
-        if (!repository || !passphrase) return;
-        setLoading(true); setResult(null);
-        try {
-            const res = await fetch('/api/plakar/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, passphrase }) });
-            const data = await res.json();
-            setResult({ success: data.success, message: data.message || data.error });
-        } catch { setResult({ success: false, message: 'Network error.' }); }
-        setLoading(false);
-    };
-
     const handleBackup = async () => {
         if (!repository || !source || !passphrase) return;
         setLoading(true); setResult(null);
         try {
             const res = await fetch('/api/plakar/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, source, passphrase }) });
             const data = await res.json();
-            setResult({ success: data.success, message: data.message || data.error, snapshotId: data.snapshotId });
+            const folderName = source.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || source;
+
+            if (data.success) {
+                // Save successful source path to local storage
+                try {
+                    const updated = [source, ...recentSources.filter(s => s !== source)].slice(0, 5);
+                    localStorage.setItem('plakarRecentSources', JSON.stringify(updated));
+                    setRecentSources(updated);
+                } catch (e) { }
+
+                // Save backup history to server
+                try {
+                    await fetch('/api/plakar/backup-history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ repository, sourcePath: source, folderName, snapshotId: data.snapshotId })
+                    });
+                } catch (e) { }
+            }
+
+            setResult({
+                success: data.success,
+                message: data.success
+                    ? `Backup successful — ${folderName} (Snapshot: ${data.snapshotId || 'unknown'})`
+                    : data.message || data.error,
+                snapshotId: data.snapshotId
+            });
+
+            // After success, reset all fields
+            if (data.success) {
+                setTimeout(() => {
+                    setRepository('');
+                    setSource('');
+                    setPassphrase('');
+                    setResult(null);
+                    setLastBackupInfo(null);
+                }, 3000);
+            }
         } catch { setResult({ success: false, message: 'Network error.' }); }
         setLoading(false);
     };
 
     return (
-        <div className="animate-fade-in-up max-w-3xl mx-auto">
-            {/* Hero header */}
-            <div className="text-center mb-10">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-card text-xs font-bold text-indigo-500">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                        {initMode ? 'Initialize Mode' : 'Backup Mode'}
-                    </div>
-                    <ThemeToggle />
-                </div>
-                <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white mb-3">
-                    {initMode ? 'Initialize ' : 'Manage Your '}
-                    <span className="text-gradient">{initMode ? 'Repository' : 'Backups'}</span>
+        <div className="relative min-h-[calc(100vh-4rem)] flex flex-col items-center pt-10 sm:pt-16 px-4">
+
+            {/* Background watermark icon (shield) */}
+            <div className="fixed -bottom-32 -right-32 opacity-[0.03] dark:opacity-[0.02] pointer-events-none z-0 text-slate-900 dark:text-white">
+                <span className="material-icons-round" style={{ fontSize: '600px' }}>shield</span>
+            </div>
+
+            {/* Header */}
+            <div className="text-center z-10 w-full max-w-2xl mb-8">
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#1e2330] dark:text-white mb-2">
+                    Manage Your Backups
                 </h1>
-                <p className="text-lg text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                    {initMode ? 'Create a new encrypted repository for your data.' : 'Secure, encrypted, and efficient snapshots for your files.'}
+                <p className="text-[#64748b] dark:text-slate-400 text-base sm:text-lg font-medium">
+                    Secure, encrypted, and efficient snapshots for your files.
                 </p>
             </div>
 
-            {/* Alert */}
-            {result && (
-                <div className={`glass-card rounded-xl p-5 mb-6 flex items-start gap-3 animate-fade-in-scale ${result.success ? 'border-emerald-500/30' : 'border-red-500/30'}`} style={{ borderWidth: '1px' }}>
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${result.success ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                        <span className="material-icons-round">{result.success ? 'check_circle' : 'error'}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 className={`text-sm font-bold ${result.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {result.success ? 'Success!' : 'Error'}
-                        </h3>
-                        <p className={`text-sm mt-0.5 ${result.success ? 'text-emerald-700/70 dark:text-emerald-300/70' : 'text-red-700/70 dark:text-red-300/70'}`}>
-                            {result.message}
-                            {result.snapshotId && <> — Snapshot: <span className="font-mono font-bold">{result.snapshotId}</span></>}
-                        </p>
-                    </div>
-                    <button onClick={() => setResult(null)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
-                        <span className="material-icons-round text-sm text-slate-400">close</span>
-                    </button>
-                </div>
-            )}
+            {/* Main White Card */}
+            <div className="bg-white dark:bg-[#0f172a] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-slate-100 dark:border-white/5 rounded-2xl w-full max-w-[640px] z-10 p-6 sm:p-8 relative">
 
-            {/* Main form card */}
-            <div className="gradient-border rounded-2xl">
-                <div className="relative z-10">
-                    {/* Mode toggle */}
-                    <div className="p-3 border-b border-slate-200/30 dark:border-white/5">
-                        <div className="flex p-1 space-x-1 glass-card rounded-xl max-w-md mx-auto">
-                            <button onClick={() => setInitMode(false)}
-                                className={`flex-1 rounded-lg py-2.5 text-sm font-bold flex justify-center items-center gap-2 transition-all duration-300 cursor-pointer ${!initMode ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
-                                <span className="material-icons-round text-base">backup</span> Run Backup
-                            </button>
-                            <button onClick={() => setInitMode(true)}
-                                className={`flex-1 rounded-lg py-2.5 text-sm font-bold flex justify-center items-center gap-2 transition-all duration-300 cursor-pointer ${initMode ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
-                                <span className="material-icons-round text-base">create_new_folder</span> Initialize Repo
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Form */}
-                    <div className="p-8 space-y-6">
-                        {/* Repository input */}
-                        <div>
-                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-                                <span className="w-6 h-6 rounded-md bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
-                                    <span className="material-icons-round text-indigo-500 text-sm">dns</span>
-                                </span>
-                                Repository Location
-                            </label>
-                            <div className="flex rounded-xl overflow-hidden glass-card">
-                                <input type="text" value={repository} onChange={(e) => setRepository(e.target.value)}
-                                    placeholder={detectedOS === 'windows' ? 'e.g. C:\\Users\\You\\Desktop\\MyBackups' : 'e.g. ~/Desktop/MyBackups'}
-                                    className="flex-1 px-4 py-3.5 text-sm bg-transparent border-0 text-slate-900 dark:text-white focus:ring-0 focus:outline-none placeholder:text-slate-400"
-                                />
-                                <button onClick={() => openNativePicker('repo')} disabled={browsing}
-                                    className="px-5 text-sm font-bold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 border-l border-slate-200/30 dark:border-white/5 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 transition-colors flex items-center gap-2 cursor-pointer">
-                                    <span className="material-icons-round text-lg">folder_open</span> Browse
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Source input */}
-                        {!initMode && (
-                            <div className="animate-fade-in-up">
-                                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-                                    <span className="w-6 h-6 rounded-md bg-purple-500/10 dark:bg-purple-500/20 flex items-center justify-center">
-                                        <span className="material-icons-round text-purple-500 text-sm">source</span>
-                                    </span>
-                                    Source to Backup
-                                </label>
-                                <div className="flex rounded-xl overflow-hidden glass-card">
-                                    <input type="text" value={source} onChange={(e) => setSource(e.target.value)}
-                                        placeholder={detectedOS === 'windows' ? 'e.g. C:\\Users\\You\\Documents' : 'e.g. ~/Documents'}
-                                        className="flex-1 px-4 py-3.5 text-sm bg-transparent border-0 text-slate-900 dark:text-white focus:ring-0 focus:outline-none placeholder:text-slate-400"
-                                    />
-                                    <button onClick={() => openNativePicker('source')} disabled={browsing}
-                                        className="px-5 text-sm font-bold text-purple-500 hover:text-purple-600 dark:hover:text-purple-400 border-l border-slate-200/30 dark:border-white/5 hover:bg-purple-50/50 dark:hover:bg-purple-500/5 transition-colors flex items-center gap-2 cursor-pointer">
-                                        <span className="material-icons-round text-lg">folder_open</span> Browse
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Passphrase input */}
-                        <div>
-                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-                                <span className="w-6 h-6 rounded-md bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center">
-                                    <span className="material-icons-round text-amber-500 text-sm">lock</span>
-                                </span>
-                                Encryption Passphrase
-                            </label>
-                            <div className="relative rounded-xl overflow-hidden glass-card">
-                                <input type={showPass ? 'text' : 'password'} value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
-                                    placeholder="••••••••••••"
-                                    className="block w-full px-4 pr-12 py-3.5 text-sm bg-transparent border-0 text-slate-900 dark:text-white focus:ring-0 focus:outline-none placeholder:text-slate-400"
-                                />
-                                <button type="button" onClick={() => setShowPass(!showPass)}
-                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer">
-                                    <span className="material-icons-round text-lg">{showPass ? 'visibility_off' : 'visibility'}</span>
-                                </button>
-                            </div>
-                            <p className="mt-2 text-xs text-amber-600/80 dark:text-amber-400/80 flex items-center gap-1.5 font-medium">
-                                <span className="material-icons-round text-xs">info</span>
-                                {initMode ? 'Create a strong passphrase. You will need it for all future operations!' : 'Required to unlock the repository for writing.'}
+                {/* Alert Notification */}
+                {result && (
+                    <div className={`mb-6 p-4 rounded-xl flex items-start gap-3 ${result.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' : 'bg-red-50 text-red-800 border border-red-100'} dark:bg-transparent dark:border-opacity-20`}>
+                        <span className="material-icons-round mt-0.5">{result.success ? 'check_circle' : 'error'}</span>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-bold">{result.success ? 'Success!' : 'Error'}</h3>
+                            <p className="text-sm opacity-90">
+                                {result.message}
+                                {result.snapshotId && <> — Snapshot: <span className="font-mono font-bold">{result.snapshotId}</span></>}
                             </p>
                         </div>
+                        <button onClick={() => setResult(null)} className="opacity-50 hover:opacity-100">
+                            <span className="material-icons-round text-sm">close</span>
+                        </button>
+                    </div>
+                )}
 
-                        {/* Submit */}
-                        <div className="pt-2">
-                            <button onClick={initMode ? handleCreateRepo : handleBackup}
-                                disabled={loading || !repository || !passphrase || (!initMode && !source)}
-                                className="btn-glow w-full flex justify-center py-4 px-4 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 hover:shadow-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-indigo-500/30 cursor-pointer">
-                                {loading ? (
-                                    <><span className="spinner mr-2" />{initMode ? 'Initializing...' : 'Backing up...'}</>
-                                ) : (
-                                    <span className="flex items-center gap-2">
-                                        <span className="material-icons-round text-lg">{initMode ? 'create_new_folder' : 'backup'}</span>
-                                        {initMode ? 'Initialize Repository' : 'Run Backup Now'}
-                                    </span>
-                                )}
+                <div className="space-y-6">
+                    {/* Repository Input */}
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-[13px] font-bold text-slate-700 dark:text-slate-300">
+                                Repository Location
+                            </label>
+                            {/* Dashboard Selector */}
+                            {knownRepos.length > 0 && (
+                                <select
+                                    className="text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold border-0 rounded-md py-1 px-2 cursor-pointer focus:ring-0 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%225%22%20viewBox%3D%220%200%2010%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M1%201L5%204L9%201%22%20stroke%3D%22%234f46e5%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:calc(100%-0.5rem)_center] pr-6"
+                                    onChange={(e) => {
+                                        if (e.target.value) setRepository(e.target.value);
+                                        e.target.value = ""; // Reset selector
+                                    }}
+                                    defaultValue=""
+                                >
+                                    <option value="" disabled>Select from Dashboard...</option>
+                                    {knownRepos.map(r => (
+                                        <option key={r.path} value={r.path}>{r.name} ({r.path})</option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+                            <input
+                                type="text"
+                                value={repository}
+                                onChange={(e) => setRepository(e.target.value)}
+                                placeholder={detectedOS === 'windows' ? 'C:\\SecureVault\\PlakarBackups' : '/Volumes/SecureVault/PlakarBackups'}
+                                className="flex-1 px-4 py-3 border-0 text-[14px] text-slate-800 dark:text-slate-200 bg-transparent focus:ring-0 placeholder:text-slate-400 font-medium font-mono"
+                            />
+                            <button
+                                onClick={() => openNativePicker('repo')}
+                                disabled={browsing}
+                                className="bg-[#f8fafc] dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 w-14 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                                title="Browse Native Folders"
+                            >
+                                <span className="material-icons-round text-[20px]">folder</span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="px-8 py-4 border-t border-slate-200/30 dark:border-white/5 flex justify-between items-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-                        <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-500/50" />
-                            Local Mode
+                    {/* Source Input */}
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-[13px] font-bold text-slate-700 dark:text-slate-300">
+                                Source to Backup
+                            </label>
+                            {/* Recent Sources Selector */}
+                            {recentSources.length > 0 && (
+                                <select
+                                    className="text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold border-0 rounded-md py-1 px-2 cursor-pointer focus:ring-0 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%225%22%20viewBox%3D%220%200%2010%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M1%201L5%204L9%201%22%20stroke%3D%22%234f46e5%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:calc(100%-0.5rem)_center] pr-6"
+                                    onChange={(e) => {
+                                        if (e.target.value) setSource(e.target.value);
+                                        e.target.value = ""; // Reset selector
+                                    }}
+                                    defaultValue=""
+                                >
+                                    <option value="" disabled>Recent Sources...</option>
+                                    {recentSources.map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
-                        <div className="text-gradient font-bold">Plakar Dashboard</div>
+                        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+                            <input
+                                type="text"
+                                value={source}
+                                onChange={(e) => setSource(e.target.value)}
+                                placeholder={detectedOS === 'windows' ? 'C:\\Documents\\Work\\Projects' : '~/Documents/Work/Projects'}
+                                className="flex-1 px-4 py-3 border-0 text-[14px] text-slate-800 dark:text-slate-200 bg-transparent focus:ring-0 placeholder:text-slate-400 font-medium font-mono"
+                            />
+                            <button
+                                onClick={() => openNativePicker('source')}
+                                disabled={browsing}
+                                className="bg-[#f8fafc] dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 w-14 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                            >
+                                <span className="material-icons-round text-[20px]">pie_chart</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Previously Backed Up Notice */}
+                    {lastBackupInfo && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
+                            <span className="material-icons-round text-amber-500 mt-0.5">history</span>
+                            <div>
+                                <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">Previously Backed Up</h4>
+                                <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-0.5">
+                                    This folder was last backed up on <strong>{new Date(lastBackupInfo.lastBackup).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong> ({lastBackupInfo.snapshotCount} snapshot{lastBackupInfo.snapshotCount !== 1 ? 's' : ''} total).
+                                </p>
+                                <p className="text-xs text-amber-600 dark:text-amber-400/60 mt-1.5 flex items-center gap-1">
+                                    <span className="material-icons-round text-[14px]">storage</span>
+                                    Plakar uses deduplication — unchanged files won&apos;t consume extra storage. Only modified or new files will take additional space.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Passphrase Input */}
+                    <div>
+                        <label className="block text-[13px] font-bold text-slate-700 dark:text-slate-300 mb-2">
+                            Encryption Passphrase
+                        </label>
+                        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+                            <input
+                                type={showPass ? 'text' : 'password'}
+                                value={passphrase}
+                                onChange={(e) => setPassphrase(e.target.value)}
+                                placeholder="••••••••••••"
+                                className="flex-1 px-4 py-3 border-0 text-[14px] text-slate-800 dark:text-slate-200 bg-transparent focus:ring-0 placeholder:text-slate-400 font-medium"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPass(!showPass)}
+                                className="bg-white dark:bg-slate-900 w-14 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                            >
+                                <span className="material-icons-round text-[20px]">{showPass ? 'visibility_off' : 'visibility'}</span>
+                            </button>
+                        </div>
+                        <p className="mt-2.5 text-[11px] font-medium text-[#94a3b8]">
+                            Plakar never stores this passphrase. It is only held in memory during the backup process.
+                        </p>
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="pt-2">
+                        <button
+                            onClick={handleBackup}
+                            disabled={loading || !repository || !source || !passphrase}
+                            className="w-full flex justify-center py-3.5 px-4 text-[15px] font-bold rounded-xl text-white bg-[#3f3fbb] hover:bg-[#343499] shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {loading ? (
+                                <><span className="spinner border-2 border-white/20 border-t-white rounded-full w-5 h-5 animate-spin mr-2" />Running...</>
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    <span className="material-icons-round text-[20px]">cloud_upload</span>
+                                    Run Backup Now
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
+            </div>
+
+            {/* Footer Status Indicators */}
+            <div className="w-full max-w-[640px] px-2 py-4 flex justify-between items-center text-[12px] font-medium z-10">
+                <div className="flex items-center gap-2 text-slate-500">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" />
+                    Local Mode: <span className="text-slate-800 dark:text-slate-200 font-bold">Active</span>
+                </div>
+                <Link href="/" className="text-[#3f3fbb] dark:text-indigo-400 hover:text-[#5252e1] dark:hover:text-indigo-300 transition-colors cursor-pointer flex items-center gap-1 group font-bold">
+                    Plakar Dashboard
+                    <span className="material-icons-round text-[14px] transition-transform group-hover:translate-x-0.5">arrow_forward</span>
+                </Link>
             </div>
         </div>
     );
@@ -224,7 +339,7 @@ function BackupPageContent() {
 
 export default function BackupPage() {
     return (
-        <Suspense fallback={<div className="animate-pulse text-center py-20 text-slate-400">Loading...</div>}>
+        <Suspense fallback={<div className="animate-pulse text-center py-20 text-slate-400 font-medium">Loading...</div>}>
             <BackupPageContent />
         </Suspense>
     );

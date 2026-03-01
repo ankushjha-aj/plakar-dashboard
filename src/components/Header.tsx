@@ -9,7 +9,6 @@ const navItems = [
     { href: '/', label: 'Dashboard', icon: 'dashboard' },
     { href: '/repositories', label: 'Repositories', icon: 'storage' },
     { href: '/backup', label: 'Backup', icon: 'backup' },
-    { href: '/snapshots', label: 'Snapshots', icon: 'history' },
     { href: '/restore', label: 'Restore', icon: 'restore' },
     { href: '/settings', label: 'Settings', icon: 'settings' },
 ];

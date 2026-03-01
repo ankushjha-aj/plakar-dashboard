@@ -193,7 +193,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger-children">
           {[
             { href: '/backup', icon: 'backup', color: 'from-indigo-500 via-blue-500 to-cyan-400', bg: 'bg-blue-50 dark:bg-blue-900/20', iconColor: 'text-blue-600 dark:text-blue-400', title: 'Run Backup', desc: 'Create encrypted snapshots of your files instantly.' },
-            { href: '/snapshots', icon: 'folder_open', color: 'from-purple-500 via-fuchsia-500 to-pink-400', bg: 'bg-purple-50 dark:bg-purple-900/20', iconColor: 'text-purple-600 dark:text-purple-400', title: 'Browse Snapshots', desc: 'Explore data history, audit changes and download.' },
+            { href: '/repositories', icon: 'folder_open', color: 'from-purple-500 via-fuchsia-500 to-pink-400', bg: 'bg-purple-50 dark:bg-purple-900/20', iconColor: 'text-purple-600 dark:text-purple-400', title: 'Browse Snapshots', desc: 'Explore data history, audit changes and download.' },
             { href: '/restore', icon: 'replay', color: 'from-emerald-500 via-teal-500 to-cyan-400', bg: 'bg-teal-50 dark:bg-teal-900/20', iconColor: 'text-teal-600 dark:text-teal-400', title: 'Restore Files', desc: 'Recover specific files from any snapshot version.' },
           ].map((a) => (
             <Link key={a.href} href={a.href} className="group relative glass-card rounded-xl p-6 overflow-hidden flex items-start gap-4">

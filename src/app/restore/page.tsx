@@ -1,14 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 type OSType = 'windows' | 'macos' | 'linux';
 
 export default function RestorePage() {
     const [detectedOS, setDetectedOS] = useState<OSType>('windows');
 
-    useEffect(() => {
-        fetch('/api/plakar/status').then(r => r.json()).then(d => { if (d.os) setDetectedOS(d.os); }).catch(() => { });
-    }, []);
     const [repo, setRepo] = useState('');
     const [snapId, setSnapId] = useState('');
     const [dest, setDest] = useState('');
@@ -17,6 +14,81 @@ export default function RestorePage() {
     const [loading, setLoading] = useState(false);
     const [browsing, setBrowsing] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+    const [knownRepos, setKnownRepos] = useState<{ name: string, path: string }[]>([]);
+    const [recentDests, setRecentDests] = useState<string[]>([]);
+    const [repoSnapshots, setRepoSnapshots] = useState<{ snapshotId: string, timestamp: string, path: string, size: string }[]>([]);
+    const [fetchingSnaps, setFetchingSnaps] = useState(false);
+    const [noSnapsFound, setNoSnapsFound] = useState(false);
+    const [wrongPassword, setWrongPassword] = useState(false);
+
+    useEffect(() => {
+        fetch('/api/plakar/status').then(r => r.json()).then(d => { if (d.os) setDetectedOS(d.os); }).catch(() => { });
+
+        fetch('/api/plakar/repos').then(r => r.json()).then(d => {
+            if (d.repos) setKnownRepos(d.repos);
+        }).catch(() => { });
+
+        try {
+            const saved = localStorage.getItem('plakarRecentDests');
+            if (saved) setRecentDests(JSON.parse(saved));
+        } catch (e) { }
+    }, []);
+
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const fetchSnapshots = useCallback((repoPath: string, passphrase: string) => {
+        setFetchingSnaps(true);
+        setNoSnapsFound(false);
+        setWrongPassword(false);
+        fetch('/api/plakar/snapshots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repository: repoPath, passphrase })
+        })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.snapshots && d.snapshots.length > 0) {
+                    setRepoSnapshots(d.snapshots);
+                    setNoSnapsFound(false);
+                    setWrongPassword(false);
+                } else if (!d.success) {
+                    // Wrong password or invalid repo
+                    setRepoSnapshots([]);
+                    setNoSnapsFound(false);
+                    setWrongPassword(true);
+                } else {
+                    // Success but no snapshots
+                    setRepoSnapshots([]);
+                    setNoSnapsFound(true);
+                    setWrongPassword(false);
+                }
+            })
+            .catch(() => {
+                setRepoSnapshots([]);
+                setWrongPassword(true);
+            })
+            .finally(() => setFetchingSnaps(false));
+    }, []);
+
+    useEffect(() => {
+        if (!repo || !pass) {
+            setRepoSnapshots([]);
+            setFetchingSnaps(false);
+            return;
+        }
+
+        // Debounce: wait 400ms after user stops typing before fetching
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            setFetchingSnaps(true);
+            fetchSnapshots(repo, pass);
+        }, 400);
+
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, [repo, pass, fetchSnapshots]);
 
     const browse = async (t: 'repo' | 'dest') => {
         setBrowsing(true);
@@ -32,22 +104,46 @@ export default function RestorePage() {
         setLoading(true); setResult(null);
         try {
             const r = await fetch('/api/plakar/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: repo, snapshotId: snapId, destination: dest, passphrase: pass }) });
-            const d = await r.json(); setResult({ ok: d.success, msg: d.message || d.error });
+            const d = await r.json();
+            if (d.success) {
+                try {
+                    const updated = [dest, ...recentDests.filter(s => s !== dest)].slice(0, 5);
+                    localStorage.setItem('plakarRecentDests', JSON.stringify(updated));
+                    setRecentDests(updated);
+                } catch (e) { }
+                setResult({ ok: true, msg: d.message || 'Restore successful!' });
+                // Reset all fields after successful restore
+                setTimeout(() => {
+                    setRepo('');
+                    setPass('');
+                    setSnapId('');
+                    setDest('');
+                    setResult(null);
+                    setRepoSnapshots([]);
+                    setNoSnapsFound(false);
+                    setWrongPassword(false);
+                }, 3000);
+            } else {
+                setResult({ ok: false, msg: d.message || d.error });
+            }
         } catch { setResult({ ok: false, msg: 'Network error.' }); }
         setLoading(false);
     };
 
-    const InputRow = ({ label, icon, val, set, placeholder, mono, browseTarget }: { label: string; icon: string; val: string; set: (v: string) => void; placeholder: string; mono?: boolean; browseTarget?: 'repo' | 'dest' }) => (
-        <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{label}</label>
-            <div className="relative flex items-center">
+    const InputRow = ({ label, icon, val, set, placeholder, mono, browseTarget, dropdown, disabled, loading }: { label: string; icon: string; val: string; set: (v: string) => void; placeholder: string; mono?: boolean; browseTarget?: 'repo' | 'dest', dropdown?: React.ReactNode, disabled?: boolean, loading?: boolean }) => (
+        <div className={(disabled && !loading) ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
+            <div className="flex items-center justify-between mb-1.5">
+                <label className={`text-sm font-medium text-slate-700 dark:text-slate-300 ${(disabled && loading) ? "opacity-50" : ""}`}>{label}</label>
+                {dropdown}
+            </div>
+            <div className={`relative flex items-center ${(disabled && loading) ? "opacity-50 pointer-events-none" : ""}`}>
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="material-icons-round text-slate-400 text-lg">{icon}</span>
                 </div>
-                <input type="text" value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
+                <input type="text" value={val} onChange={e => set(e.target.value)} placeholder={placeholder} disabled={disabled || loading}
                     className={`block w-full pl-10 ${browseTarget ? 'pr-24' : ''} py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-indigo-500 focus:border-indigo-500 ${mono ? 'font-mono' : ''}`} />
-                {browseTarget && <button onClick={() => browse(browseTarget)} disabled={browsing}
-                    className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs font-medium rounded border border-slate-200 dark:border-slate-600 transition-colors">Browse</button>}
+                {browseTarget && <button onClick={() => browse(browseTarget)} disabled={browsing || disabled || loading} type="button"
+                    className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs font-medium rounded border border-slate-200 dark:border-slate-600 transition-colors cursor-pointer">Browse</button>}
             </div>
         </div>
     );
@@ -80,18 +176,31 @@ export default function RestorePage() {
                             <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">1</div>
                             <h3 className="text-lg font-medium text-slate-900 dark:text-white">Source Configuration</h3>
                         </div>
-                        <InputRow label="Repository Path" icon="folder_open" val={repo} set={setRepo} placeholder={detectedOS === 'windows' ? 'C:\\Users\\You\\Desktop\\MyBackups' : '~/Desktop/MyBackups'} browseTarget="repo" />
-                        <InputRow label="Snapshot ID" icon="qr_code_2" val={snapId} set={setSnapId} placeholder="e.g. 8f4a2b1c" mono />
-                    </div>
-
-                    <div className="border-t border-slate-200 dark:border-slate-700" />
-
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">2</div>
-                            <h3 className="text-lg font-medium text-slate-900 dark:text-white">Destination &amp; Security</h3>
-                        </div>
-                        <InputRow label="Restore Destination Path" icon="drive_file_move" val={dest} set={setDest} placeholder={detectedOS === 'windows' ? 'C:\\Users\\You\\Desktop\\Restored' : '~/Desktop/Restored'} browseTarget="dest" />
+                        <InputRow
+                            label="Repository Path"
+                            icon="folder_open"
+                            val={repo}
+                            set={setRepo}
+                            placeholder={detectedOS === 'windows' ? 'C:\\Users\\You\\Desktop\\MyBackups' : '~/Desktop/MyBackups'}
+                            browseTarget="repo"
+                            dropdown={
+                                knownRepos.length > 0 ? (
+                                    <select
+                                        className="text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold border-0 rounded-md py-1 px-2 cursor-pointer focus:ring-0 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%225%22%20viewBox%3D%220%200%2010%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M1%201L5%204L9%201%22%20stroke%3D%22%234f46e5%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:calc(100%-0.5rem)_center] pr-6"
+                                        onChange={(e) => {
+                                            if (e.target.value) setRepo(e.target.value);
+                                            e.target.value = "";
+                                        }}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Select Dashboard Repo...</option>
+                                        {knownRepos.map(r => (
+                                            <option key={r.path} value={r.path}>{r.name} ({r.path})</option>
+                                        ))}
+                                    </select>
+                                ) : undefined
+                            }
+                        />
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Repository Passphrase</label>
                             <div className="relative flex items-center">
@@ -102,6 +211,101 @@ export default function RestorePage() {
                                     <span className="material-icons-round text-lg">{showPass ? 'visibility' : 'visibility_off'}</span></button>
                             </div>
                         </div>
+                        <InputRow
+                            label="Snapshot ID"
+                            icon="qr_code_2"
+                            val={snapId}
+                            set={setSnapId}
+                            placeholder={fetchingSnaps ? "Fetching snapshots..." : "e.g. 8f4a2b1c"}
+                            mono
+                            disabled={!pass || fetchingSnaps || repoSnapshots.length === 0}
+                            loading={fetchingSnaps}
+                            dropdown={
+                                fetchingSnaps ? (
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xs rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-800 animate-pulse">
+                                        <span className="spinner w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                                        Fetching Snapshots...
+                                    </div>
+                                ) : repoSnapshots.length > 0 ? (
+                                    <select
+                                        className="text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold border-0 rounded-md py-1 px-2 cursor-pointer focus:ring-0 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%225%22%20viewBox%3D%220%200%2010%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M1%201L5%204L9%201%22%20stroke%3D%22%234f46e5%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:calc(100%-0.5rem)_center] pr-6"
+                                        onChange={(e) => {
+                                            if (e.target.value) setSnapId(e.target.value);
+                                            e.target.value = "";
+                                        }}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Select Snapshot...</option>
+                                        {repoSnapshots.map(s => {
+                                            const d = new Date(s.timestamp).toLocaleString();
+                                            const folderName = s.path ? s.path.split('/').filter(Boolean).pop() || s.path : '';
+                                            return <option key={s.snapshotId} value={s.snapshotId}>{s.snapshotId.substring(0, 8)} — {folderName} ({d})</option>;
+                                        })}
+                                    </select>
+                                ) : undefined
+                            }
+                        />
+                    </div>
+
+                    {/* Wrong Password Notice */}
+                    {wrongPassword && !fetchingSnaps && (
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3 animate-fade-in-up">
+                            <span className="material-icons-round text-red-500 mt-0.5">error</span>
+                            <div>
+                                <h4 className="text-sm font-bold text-red-800 dark:text-red-300">Incorrect Passphrase</h4>
+                                <p className="text-sm text-red-700 dark:text-red-400/80 mt-0.5">
+                                    The passphrase you entered is incorrect or the repository path is invalid. Please check and try again.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* No Snapshots Found Notice */}
+                    {noSnapsFound && !fetchingSnaps && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3 animate-fade-in-up">
+                            <span className="material-icons-round text-amber-500 mt-0.5">info</span>
+                            <div>
+                                <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">No Snapshots Found</h4>
+                                <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-0.5">
+                                    This repository does not contain any backups yet. Please create a backup first using the <strong>Backup</strong> page.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="border-t border-slate-200 dark:border-slate-700" />
+
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">2</div>
+                            <h3 className="text-lg font-medium text-slate-900 dark:text-white">Restore Destination</h3>
+                        </div>
+                        <InputRow
+                            label="Restore Destination Path"
+                            icon="drive_file_move"
+                            val={dest}
+                            set={setDest}
+                            placeholder={detectedOS === 'windows' ? 'C:\\Users\\You\\Desktop\\Restored' : '~/Desktop/Restored'}
+                            browseTarget="dest"
+                            disabled={!pass || fetchingSnaps || repoSnapshots.length === 0}
+                            dropdown={
+                                recentDests.length > 0 ? (
+                                    <select
+                                        className="text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold border-0 rounded-md py-1 px-2 cursor-pointer focus:ring-0 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2210%22%20height%3D%225%22%20viewBox%3D%220%200%2010%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M1%201L5%204L9%201%22%20stroke%3D%22%234f46e5%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:calc(100%-0.5rem)_center] pr-6"
+                                        onChange={(e) => {
+                                            if (e.target.value) setDest(e.target.value);
+                                            e.target.value = ""; // Reset selector
+                                        }}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Recent Destinations...</option>
+                                        {recentDests.map(sd => (
+                                            <option key={sd} value={sd}>{sd}</option>
+                                        ))}
+                                    </select>
+                                ) : undefined
+                            }
+                        />
                     </div>
 
                     <div className="pt-6 flex justify-end">
@@ -112,6 +316,7 @@ export default function RestorePage() {
                     </div>
                 </div>
             </div>
+
         </div>
     );
 }
