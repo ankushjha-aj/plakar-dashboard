@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import { addActivityEntry } from '@/lib/activityLog';
 
 type OSType = 'windows' | 'macos' | 'linux';
 
@@ -113,6 +114,13 @@ function BackupPageContent() {
                         body: JSON.stringify({ repository, sourcePath: source, folderName, snapshotId: data.snapshotId })
                     });
                 } catch (e) { }
+
+                // Log activity
+                addActivityEntry({
+                    type: 'backup',
+                    title: `Backup created — ${folderName}`,
+                    detail: `Snapshot ${(data.snapshotId || 'unknown').substring(0, 8)} · ${repository.split(/[\/\\]/).pop() || repository}`,
+                });
             }
 
             setResult({

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from '@/components/ThemeToggle';
+import { addActivityEntry } from '@/lib/activityLog';
 
 interface SavedRepo { path: string; name: string; createdAt: string; isArchived?: boolean; }
 
@@ -60,6 +61,12 @@ export default function RepositoriesPage() {
             const data = await res.json();
             setNewRepoResult({ success: data.success, message: data.message || data.error });
             if (data.success) {
+                // Log activity
+                addActivityEntry({
+                    type: 'repo_created',
+                    title: `Repository created`,
+                    detail: newRepoPath.split(/[\/\\]/).pop() || newRepoPath,
+                });
                 fetchRepos();
                 setTimeout(() => {
                     setShowInitModal(false);
@@ -146,6 +153,12 @@ export default function RepositoriesPage() {
             const data = await res.json();
 
             if (data.success) {
+                // Log activity
+                addActivityEntry({
+                    type: actionRepo.action === 'archive' ? 'repo_archived' : 'repo_restored',
+                    title: actionRepo.action === 'archive' ? `Repository archived` : `Repository restored`,
+                    detail: actionRepo.repo.name,
+                });
                 setActionRepo(null);
                 setActionPassphrase('');
                 fetchRepos();

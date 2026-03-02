@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { addActivityEntry } from '@/lib/activityLog';
 
 type OSType = 'windows' | 'macos' | 'linux';
 
@@ -146,6 +147,14 @@ export default function RestorePage() {
                     localStorage.setItem('plakarRecentDests', JSON.stringify(updated));
                     setRecentDests(updated);
                 } catch (e) { }
+
+                // Log activity
+                addActivityEntry({
+                    type: 'restore',
+                    title: `Restore completed`,
+                    detail: `Snapshot ${snapId.substring(0, 8)} → ${dest.split(/[\/\\]/).pop() || dest}`,
+                });
+
                 setResult({ ok: true, msg: d.message || 'Restore successful!' });
 
                 setTimeout(() => {
