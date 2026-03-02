@@ -13,6 +13,12 @@ export default function RepositoriesPage() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'all' | 'cloud' | 'local' | 'archived'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, activeTab]);
 
     // Action Modal State (Archive/Restore/Delete)
     const [actionRepo, setActionRepo] = useState<{ repo: SavedRepo, action: 'archive' | 'restore' | 'delete' } | null>(null);
@@ -234,11 +240,12 @@ export default function RepositoriesPage() {
                     className={`pb-3 border-b-2 font-bold text-sm flex items-center gap-2 ${activeTab === 'all' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
                     <span className="material-icons-round text-[18px]">format_list_bulleted</span> All Repositories
                 </button>
-                <button
-                    onClick={() => setActiveTab('cloud')}
-                    className={`pb-3 border-b-2 font-bold text-sm flex items-center gap-2 ${activeTab === 'cloud' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                <div
+                    title="Coming soon"
+                    className={`pb-3 border-b-2 font-bold text-sm flex items-center gap-2 border-transparent text-slate-400 cursor-not-allowed`}
+                >
                     <span className="material-icons-round text-[18px]">cloud</span> Cloud
-                </button>
+                </div>
                 <button
                     onClick={() => setActiveTab('local')}
                     className={`pb-3 border-b-2 font-bold text-sm flex items-center gap-2 ${activeTab === 'local' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
@@ -281,10 +288,12 @@ export default function RepositoriesPage() {
                         </h3>
                         {searchQuery ? (
                             <p className="text-slate-500 text-sm max-w-sm mb-6">We couldn't find any repositories matching your search query.</p>
+                        ) : activeTab === 'archived' ? (
+                            <p className="text-slate-500 text-sm max-w-sm mb-6">You don't have any archived repositories yet.</p>
                         ) : (
                             <>
                                 <p className="text-slate-500 text-sm max-w-sm mb-6">You haven't initialized any backup repositories yet. Create your first one to get started.</p>
-                                <button onClick={() => setShowInitModal(true)} className="btn-glow inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/30 hover:-translate-y-0.5 hover:shadow-indigo-500/50 transition-all">
+                                <button onClick={() => setShowInitModal(true)} className="btn-glow inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/30 hover:-translate-y-0.5 hover:shadow-indigo-500/50 transition-all cursor-pointer">
                                     Initialize Repository
                                 </button>
                             </>
@@ -295,8 +304,8 @@ export default function RepositoriesPage() {
                 {/* Rows */}
                 {!loading && filteredRepos.length > 0 && (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                        {filteredRepos.map((repo, idx) => {
-                            const isLatest = idx === 0;
+                        {filteredRepos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((repo, idx) => {
+                            const isLatest = currentPage === 1 && idx === 0;
                             const d = new Date(repo.createdAt);
                             const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                             const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -339,9 +348,9 @@ export default function RepositoriesPage() {
 
                                     {/* Location Badge */}
                                     <div className="col-span-4 flex items-center">
-                                        <div className="bg-[#f8fafc] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-md px-2.5 py-1.5 flex items-center gap-2 max-w-full">
-                                            <span className="material-icons-round text-[14px] text-slate-400 flex-shrink-0">{isCloud ? 'link' : 'folder'}</span>
-                                            <span className="text-[12px] font-mono text-slate-600 dark:text-slate-400 truncate">{repo.path}</span>
+                                        <div className="flex items-center gap-2 max-w-full">
+                                            <span className="material-icons-round text-[16px] text-slate-400 flex-shrink-0">{isCloud ? 'link' : 'folder'}</span>
+                                            <span className="text-[13px] font-mono text-slate-600 dark:text-slate-400 truncate">{repo.path}</span>
                                         </div>
                                     </div>
 
@@ -395,13 +404,21 @@ export default function RepositoriesPage() {
                 {!loading && filteredRepos.length > 0 && (
                     <div className="bg-[#f8fafc]/50 dark:bg-slate-800/20 px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
                         <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                            Showing {filteredRepos.length} of {filteredRepos.length} repositories
+                            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredRepos.length)}-{Math.min(currentPage * itemsPerPage, filteredRepos.length)} of {filteredRepos.length} repositories
                         </div>
                         <div className="flex gap-1.5">
-                            <button className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-50 transition-colors" disabled>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                            >
                                 <span className="material-icons-round text-[16px]">chevron_left</span>
                             </button>
-                            <button className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-50 transition-colors" disabled>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredRepos.length / itemsPerPage), p + 1))}
+                                disabled={currentPage >= Math.ceil(filteredRepos.length / itemsPerPage)}
+                                className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                            >
                                 <span className="material-icons-round text-[16px]">chevron_right</span>
                             </button>
                         </div>

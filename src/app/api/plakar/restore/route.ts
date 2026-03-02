@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runPlakar } from '@/lib/plakar';
+import fs from 'fs/promises';
 
 export async function POST(req: NextRequest) {
     try {
-        const { repository, snapshotId, destination, passphrase } =
+        const { repository, snapshotId, destination, passphrase, force } =
             await req.json();
 
         if (!repository || !snapshotId || !destination || !passphrase) {
@@ -17,10 +18,19 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const result = await runPlakar(
-            ['at', repository, 'restore', '-to', destination, snapshotId],
-            passphrase
-        );
+        const args = ['at', repository, 'restore', '-to', destination];
+        args.push(snapshotId);
+
+        if (force) {
+            try {
+                // Delete everything in the destination path so Plakar can restore cleanly
+                await fs.rm(destination, { recursive: true, force: true });
+            } catch (fsErr) {
+                console.warn('Could not safely clean destination directory for overwrite:', fsErr);
+            }
+        }
+
+        const result = await runPlakar(args, passphrase);
 
         return NextResponse.json({
             success: result.success,

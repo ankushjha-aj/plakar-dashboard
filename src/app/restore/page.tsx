@@ -14,6 +14,9 @@ export default function RestorePage() {
     const [loading, setLoading] = useState(false);
     const [browsing, setBrowsing] = useState(false);
     const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+    const [conflictDetected, setConflictDetected] = useState(false);
+    const [overwriting, setOverwriting] = useState(false);
+    const [overwriteProgress, setOverwriteProgress] = useState(0);
 
     const [knownRepos, setKnownRepos] = useState<{ name: string, path: string }[]>([]);
     const [recentDests, setRecentDests] = useState<string[]>([]);
@@ -85,10 +88,12 @@ export default function RestorePage() {
             fetchSnapshots(repo, pass);
         }, 400);
 
+        setConflictDetected(false); // Reset conflict on change
+
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [repo, pass, fetchSnapshots]);
+    }, [repo, pass, dest, snapId, fetchSnapshots]);
 
     const browse = async (t: 'repo' | 'dest') => {
         setBrowsing(true);
@@ -99,12 +104,42 @@ export default function RestorePage() {
         setBrowsing(false);
     };
 
-    const restore = async () => {
+    const restore = async (forceOverwrite = false) => {
         if (!repo || !snapId || !dest || !pass) return;
-        setLoading(true); setResult(null);
+        setLoading(true); setResult(null); setConflictDetected(false);
+
+        let progressInterval: ReturnType<typeof setInterval> | null = null;
+
+        if (forceOverwrite) {
+            setOverwriting(true);
+            setOverwriteProgress(0);
+            progressInterval = setInterval(() => {
+                setOverwriteProgress(p => (p < 99 ? p + Math.floor(Math.random() * 5) + 1 : 99));
+            }, 500);
+        }
+
         try {
-            const r = await fetch('/api/plakar/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: repo, snapshotId: snapId, destination: dest, passphrase: pass }) });
+            const r = await fetch('/api/plakar/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repository: repo, snapshotId: snapId, destination: dest, passphrase: pass, force: forceOverwrite })
+            });
             const d = await r.json();
+
+            if (progressInterval) clearInterval(progressInterval);
+
+            if (forceOverwrite) {
+                setOverwriteProgress(100);
+                setTimeout(() => setOverwriting(false), 800);
+            }
+
+            const combinedOutput = ((d.message || '') + ' ' + (d.error || '') + ' ' + (d.details || '')).toLowerCase();
+            if (!forceOverwrite && (combinedOutput.includes('exists') || combinedOutput.includes('file exists'))) {
+                setConflictDetected(true);
+                setLoading(false);
+                return;
+            }
+
             if (d.success) {
                 try {
                     const updated = [dest, ...recentDests.filter(s => s !== dest)].slice(0, 5);
@@ -112,7 +147,7 @@ export default function RestorePage() {
                     setRecentDests(updated);
                 } catch (e) { }
                 setResult({ ok: true, msg: d.message || 'Restore successful!' });
-                // Reset all fields after successful restore
+
                 setTimeout(() => {
                     setRepo('');
                     setPass('');
@@ -126,7 +161,11 @@ export default function RestorePage() {
             } else {
                 setResult({ ok: false, msg: d.message || d.error });
             }
-        } catch { setResult({ ok: false, msg: 'Network error.' }); }
+        } catch {
+            if (progressInterval) clearInterval(progressInterval);
+            if (forceOverwrite) setOverwriting(false);
+            setResult({ ok: false, msg: 'Network error.' });
+        }
         setLoading(false);
     };
 
@@ -309,14 +348,51 @@ export default function RestorePage() {
                     </div>
 
                     <div className="pt-6 flex justify-end">
-                        <button onClick={restore} disabled={loading || !repo || !snapId || !dest || !pass}
+                        <button onClick={() => restore(false)} disabled={loading || !repo || !snapId || !dest || !pass}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg shadow-indigo-500/30 transition-all active:scale-95 disabled:opacity-50">
-                            {loading ? <><span className="spinner" />Restoring...</> : <><span className="material-icons-round text-lg">download</span>Restore Now</>}
+                            {loading && !overwriting ? <><span className="spinner border-2 border-white/20 border-t-white rounded-full w-5 h-5 animate-spin mr-2" />Restoring...</> :
+                                overwriting ? <><span className="spinner border-2 border-white/20 border-t-white rounded-full w-5 h-5 animate-spin mr-2" />Overwriting {overwriteProgress > 100 ? 100 : overwriteProgress}%...</> :
+                                    <><span className="material-icons-round text-lg">download</span>Restore Now</>}
                         </button>
                     </div>
                 </div>
             </div>
 
+            {/* Overwrite Confirmation Modal */}
+            {conflictDetected && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in-scale">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 p-6 md:p-8">
+                        <div className="w-12 h-12 rounded-full mb-4 flex items-center justify-center bg-amber-100 text-amber-600 dark:bg-amber-500/20">
+                            <span className="material-icons-round text-2xl">warning</span>
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            Files Already Exist
+                        </h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium leading-relaxed">
+                            Some files already exist in the selected destination directory. Do you want to overwrite the existing files with the restored versions?
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setConflictDetected(false); setDest(''); }}
+                                disabled={overwriting}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => restore(true)}
+                                disabled={overwriting}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 shadow-amber-600/20 active:scale-95 disabled:opacity-50 cursor-pointer">
+                                {overwriting ? (
+                                    <><span className="spinner w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> Overwriting {Math.min(overwriteProgress, 100)}%</>
+                                ) : (
+                                    "Overwrite Files"
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
