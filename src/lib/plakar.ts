@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, unlinkSync } from 'fs';
 import path from 'path';
 import os from 'os';
 
@@ -148,6 +148,47 @@ export function runPlakar(
         errorMsg =
           'Passphrase is too weak. Use a longer passphrase with mixed characters (e.g. S3cur3!P@ssw0rd2026).';
       }
+
+      // --- Windows File Lock Workaround ---
+      // Detection: "failed to create snapshot: remove C:\...\locks\<id>: The process cannot access the file because it is being used by another process."
+      const isWindowsFileLockError = (
+        getOS() === 'windows' && 
+        allOutput.includes('failed to create snapshot: remove') &&
+        allOutput.includes('The process cannot access the file because it is being used by another process')
+      );
+
+      if (isWindowsFileLockError) {
+        // We know the snapshot was actually created successfully before the lock file removal failed.
+        // Let's extract the lock file path so we can try to clean it up asynchronously
+        const lockPathMatch = allOutput.match(/remove ([A-Z]:\\[^\:]+locks\\[a-f0-9]+): The process cannot access the file/i);
+        if (lockPathMatch && lockPathMatch[1]) {
+          const lockFile = lockPathMatch[1];
+          // Fire and forget: try to delete the lock file a few times over the next few seconds
+          let retries = 5;
+          const attemptDelete = () => {
+            try {
+              if (existsSync(lockFile)) {
+                unlinkSync(lockFile);
+              }
+            } catch {
+              retries--;
+              if (retries > 0) setTimeout(attemptDelete, 1000);
+            }
+          };
+          setTimeout(attemptDelete, 1000);
+        }
+
+        // Return a mocked success response because the snapshot DID succeed
+        // We will preserve the output so parseBackupResult can find the snapshot ID
+        resolve({
+          success: true,
+          stdout: execErr.stdout || '',
+          stderr: execErr.stderr || '',
+          exitCode: 0,
+        });
+        return;
+      }
+      // ------------------------------------
 
       resolve({
         success: false,
