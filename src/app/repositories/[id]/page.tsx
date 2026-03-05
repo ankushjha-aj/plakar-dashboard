@@ -25,6 +25,11 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
     const [deleteMsg, setDeleteMsg] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
+    // Integrity Check
+    const [checkingHealth, setCheckingHealth] = useState(false);
+    const [healthStatus, setHealthStatus] = useState<'idle' | 'healthy' | 'error'>('idle');
+    const [healthDetail, setHealthDetail] = useState('');
+
     // File Browser Modal
     const [fbOpen, setFbOpen] = useState(false);
     const [fbSnap, setFbSnap] = useState<Snap | null>(null);
@@ -169,6 +174,34 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
         } catch { setDeleteMsg('Network error.'); }
     };
 
+    const handleCheckHealth = async () => {
+        if (!repoPath) return;
+        setCheckingHealth(true);
+        setHealthStatus('idle');
+        setHealthDetail('');
+
+        try {
+            const r = await fetch('/api/plakar/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repository: repoPath, passphrase })
+            });
+            const d = await r.json();
+
+            if (d.success || d.raw.toLowerCase().includes('ok') || d.raw.toLowerCase().includes('success')) {
+                setHealthStatus('healthy');
+                setHealthDetail('Repository integrity is fully verified. No corruption detected.');
+            } else {
+                setHealthStatus('error');
+                setHealthDetail(d.error || d.raw || 'Integrity check failed with errors.');
+            }
+        } catch {
+            setHealthStatus('error');
+            setHealthDetail('Network error while running check.');
+        }
+        setCheckingHealth(false);
+    };
+
     const filteredSnapshots = snapshots.filter(s => {
         if (!activeSearch) return true;
         return s.snapshotId.toLowerCase().includes(activeSearch) ||
@@ -219,6 +252,42 @@ function RepoSnapshotsContent({ params }: { params: Promise<{ id: string }> }) {
                             </div>
 
                         </div>
+                    </div>
+                )}
+
+                {isUnlocked && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-4 shadow-sm animate-fade-in-up" style={{ animationDelay: '50ms' }}>
+                        <div>
+                            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider mb-1">Repository Health</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Verify your backups are structurally sound and safe to restore.</p>
+
+                            {healthStatus !== 'idle' && (
+                                <div className={`mt-3 flex items-start gap-2 text-sm p-3 rounded-lg border ${healthStatus === 'healthy' ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40' : 'bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/40'}`}>
+                                    <span className="material-icons-round text-[18px]">{healthStatus === 'healthy' ? 'check_circle' : 'error'}</span>
+                                    <div>
+                                        <p className="font-bold">{healthStatus === 'healthy' ? 'Healthy Repository' : 'Integrity Issues Detected'}</p>
+                                        <p className="text-xs mt-0.5 opacity-80 whitespace-pre-wrap">{healthDetail}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            onClick={handleCheckHealth}
+                            disabled={checkingHealth}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${checkingHealth ? 'bg-indigo-100 text-indigo-400 hidden-spin' : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-100 dark:border-indigo-500/20'}`}
+                        >
+                            {checkingHealth ? (
+                                <>
+                                    <span className="spinner border-2 border-indigo-500/30 border-t-indigo-600 dark:border-t-indigo-400 rounded-full w-4 h-4 animate-spin" />
+                                    Verifying Block Integrity...
+                                </>
+                            ) : (
+                                <>
+                                    <span className="material-icons-round text-[18px]">health_and_safety</span>
+                                    Verify Health
+                                </>
+                            )}
+                        </button>
                     </div>
                 )}
 
