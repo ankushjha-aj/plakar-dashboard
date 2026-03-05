@@ -9,6 +9,113 @@ interface StatusInfo {
     arch: string;
 }
 
+function PassphraseHintsList() {
+    const [repos, setRepos] = useState<{ path: string; name: string; createdAt: string; hint?: string }[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [editingPath, setEditingPath] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState('');
+
+    const fetchRepos = async () => {
+        try {
+            const res = await fetch('/api/plakar/repos');
+            const data = await res.json();
+            if (data.repos) setRepos(data.repos);
+        } catch { }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchRepos();
+    }, []);
+
+    const handleSaveHint = async (path: string) => {
+        try {
+            await fetch('/api/plakar/repos', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, hint: editValue })
+            });
+            fetchRepos();
+            setEditingPath(null);
+        } catch { }
+    };
+
+    if (loading) return <div className="p-6 text-sm text-slate-500">Loading repositories...</div>;
+    if (repos.length === 0) return <div className="p-6 text-sm text-slate-500 text-center py-10 bg-slate-50 dark:bg-slate-900/50">No repositories found.</div>;
+
+    return (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {repos.map(repo => (
+                <div key={repo.path} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex-1 w-full">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white mb-1">
+                            {repo.name} <span className="text-xs font-normal text-slate-500 font-mono ml-2">({repo.path})</span>
+                        </div>
+
+                        {editingPath === repo.path ? (
+                            <div className="mt-3 flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    placeholder="Enter a new passphrase hint..."
+                                    className="flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white py-1.5 px-3"
+                                    maxLength={100}
+                                />
+                                <button
+                                    onClick={() => handleSaveHint(repo.path)}
+                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md transition-colors"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    onClick={() => setEditingPath(null)}
+                                    className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-md transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="mt-2 text-sm">
+                                {repo.hint ? (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-600 dark:text-slate-300">
+                                            <strong className="text-slate-700 dark:text-slate-200">Hint:</strong> {repo.hint}
+                                        </span>
+                                        <button
+                                            onClick={() => { setEditingPath(repo.path); setEditValue(repo.hint || ''); }}
+                                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                                        >
+                                            Edit
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-400 italic">No hint set.</span>
+                                        <button
+                                            onClick={() => { setEditingPath(repo.path); setEditValue(''); }}
+                                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                                        >
+                                            Add Hint
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ))}
+
+            <div className="bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800/50 p-4 flex items-start gap-3">
+                <span className="material-icons-round text-amber-500 text-[20px] mt-0.5">warning</span>
+                <p className="text-[12px] text-amber-800 dark:text-amber-400 leading-relaxed font-medium">
+                    Hints are stored on this machine in plain text to help jog your memory. If you completely forget your passphrase, your backup data <strong>cannot be recovered</strong>.
+                </p>
+            </div>
+        </div>
+    );
+}
+
 export default function SettingsPage() {
     const [status, setStatus] = useState<StatusInfo | null>(null);
 
@@ -92,6 +199,24 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 )}
+            </div>
+
+            {/* Passphrase Hints */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: '50ms' }}>
+                <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                            <span className="material-icons-round">lightbulb</span>
+                        </div>
+                        <div>
+                            <h3 className="text-base font-semibold text-slate-900 dark:text-white">Passphrase Hints</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">Manage optional hints to help you remember your passphrases.</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-0">
+                    <PassphraseHintsList />
+                </div>
             </div>
 
             {/* About */}

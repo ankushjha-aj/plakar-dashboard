@@ -14,6 +14,7 @@ function BackupPageContent() {
     const [repository, setRepository] = useState('');
     const [source, setSource] = useState('');
     const [passphrase, setPassphrase] = useState('');
+    const [hint, setHint] = useState('');
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [browsing, setBrowsing] = useState(false);
@@ -31,6 +32,8 @@ function BackupPageContent() {
 
     // Previous backup tracking
     const [lastBackupInfo, setLastBackupInfo] = useState<{ lastBackup: string; snapshotCount: number } | null>(null);
+
+    const isNewRepo = repository && !knownRepos.some(r => r.path === repository);
 
     useEffect(() => {
         const qr = searchParams.get('repo');
@@ -94,7 +97,11 @@ function BackupPageContent() {
         if (!repository || !source || !passphrase) return;
         setLoading(true); setResult(null);
         try {
-            const res = await fetch('/api/plakar/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, source, passphrase }) });
+            const res = await fetch('/api/plakar/backup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repository, source, passphrase, hint: isNewRepo ? hint : undefined })
+            });
             const data = await res.json();
             const folderName = source.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || source;
 
@@ -137,6 +144,7 @@ function BackupPageContent() {
                     setRepository('');
                     setSource('');
                     setPassphrase('');
+                    setHint('');
                     setResult(null);
                     setLastBackupInfo(null);
                 }, 3000);
@@ -309,6 +317,31 @@ function BackupPageContent() {
                             Plakar never stores this passphrase. It is only held in memory during the backup process.
                         </p>
                     </div>
+
+                    {/* Optional Passphrase Hint (Only when creating a new Repo) */}
+                    {isNewRepo && (
+                        <div className="animate-in fade-in zoom-in duration-200">
+                            <label className="block text-[13px] font-bold text-slate-700 dark:text-slate-300 mb-2">
+                                Optional Passphrase Hint
+                            </label>
+                            <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all mb-4">
+                                <input
+                                    type="text"
+                                    value={hint}
+                                    onChange={(e) => setHint(e.target.value)}
+                                    placeholder="e.g. Pet name + birth year"
+                                    maxLength={100}
+                                    className="flex-1 px-4 py-3 border-0 text-[14px] text-slate-800 dark:text-slate-200 bg-transparent focus:ring-0 placeholder:text-slate-400 font-medium"
+                                />
+                            </div>
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl p-3 flex items-start gap-2.5">
+                                <span className="material-icons-round text-amber-500 text-[18px] mt-0.5">warning</span>
+                                <p className="text-[12px] text-amber-800 dark:text-amber-400 leading-relaxed font-medium">
+                                    This hint is stored only on this machine in <strong>plain text</strong>. If you forget your passphrase, your backup data <strong>cannot be recovered</strong> — Plakar&apos;s encryption makes passphrase recovery cryptographically impossible.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Submit Button */}
                     <div className="pt-2">

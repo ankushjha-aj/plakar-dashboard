@@ -11,6 +11,7 @@ export interface SavedRepo {
     name: string;
     createdAt: string;
     isArchived?: boolean;
+    hint?: string;
 }
 
 function ensureDir() {
@@ -37,7 +38,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const { path: repoPath, name } = await request.json();
+    const { path: repoPath, name, hint } = await request.json();
     if (!repoPath) {
         return NextResponse.json({ success: false, error: 'Path is required.' }, { status: 400 });
     }
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     const repoName = name || path.basename(repoPath);
-    repos.push({ path: repoPath, name: repoName, createdAt: new Date().toISOString() });
+    repos.push({ path: repoPath, name: repoName, createdAt: new Date().toISOString(), hint });
     saveRepos(repos);
 
     return NextResponse.json({ success: true, message: `Repository "${repoName}" registered.` });
@@ -66,4 +67,23 @@ export async function DELETE(request: Request) {
     saveRepos(repos);
 
     return NextResponse.json({ success: true, message: 'Repository removed from dashboard.' });
+}
+
+export async function PATCH(request: Request) {
+    const { path: repoPath, hint } = await request.json();
+    if (!repoPath) {
+        return NextResponse.json({ success: false, error: 'Path is required.' }, { status: 400 });
+    }
+
+    const repos = loadRepos();
+    const index = repos.findIndex((r) => r.path === repoPath);
+
+    if (index === -1) {
+        return NextResponse.json({ success: false, error: 'Repository not found.' }, { status: 404 });
+    }
+
+    repos[index].hint = hint;
+    saveRepos(repos);
+
+    return NextResponse.json({ success: true, message: 'Repository updated.' });
 }
