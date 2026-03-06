@@ -77,20 +77,27 @@ All operations happen **100% locally**. No cloud dependency. No external API cal
 ### Dashboard
 The main dashboard shows your backup stats, repository list, snapshot activity, and quick action shortcuts — all without needing a passphrase.
 
+<img width="1898" height="941" alt="dashboard-plakar page" src="https://github.com/user-attachments/assets/aaf99778-159f-4f22-9099-f5966543b991" />
+
 ### Repositories Page
 Manage all your encrypted backup repositories. Create new ones, archive old ones, and click any row to unlock it with your passphrase.
+
+<img width="1912" height="942" alt="repo-plakar" src="https://github.com/user-attachments/assets/c62f4731-a858-474b-bb4b-9ee44c31d158" />
 
 ### Backup Page
 Choose a source folder and a target repository to create an encrypted, deduplicated snapshot with one click.
 
+<img width="1919" height="934" alt="backup-plakar" src="https://github.com/user-attachments/assets/a32726fb-3769-43db-bf03-d89a25ebc588" />
+
 ### Restore Page
 Select a repository, unlock it, browse its file tree, and restore any file or folder to any destination on your machine.
 
-### Snapshot Browser
-After unlocking a repository, browse its complete file tree from any snapshot. Download individual files directly.
+<img width="1912" height="941" alt="restore-plakar" src="https://github.com/user-attachments/assets/24b63325-d455-4aa7-89fc-5acc9e11eedc" />
 
 ### Settings Page
 View the detected Plakar CLI path, version, platform information, and dashboard configuration.
+
+<img width="1895" height="941" alt="settings-plakar" src="https://github.com/user-attachments/assets/eb91e617-32f6-4082-b6b0-fa1d4573374e" />
 
 ---
 
