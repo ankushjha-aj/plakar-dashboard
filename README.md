@@ -1,4 +1,4 @@
-# Plakar Dashboard
+# Plakar Dashboard   
 
 > A beautiful, browser-based GUI for managing your [Plakar](https://plakar.io) encrypted backups — no terminal required.
 
